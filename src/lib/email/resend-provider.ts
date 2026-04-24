@@ -1,10 +1,13 @@
 import { Resend } from 'resend'
 import { EmailProvider, SendEmailOptions, SendEmailResult, WebhookEvent } from './provider'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export class ResendProvider implements EmailProvider {
+  private getClient() {
+    return new Resend(process.env.RESEND_API_KEY)
+  }
+
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+    const resend = this.getClient()
     try {
       const response = await resend.emails.send({
         from: options.from,
