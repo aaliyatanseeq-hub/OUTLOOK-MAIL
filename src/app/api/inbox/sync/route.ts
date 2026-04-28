@@ -14,18 +14,20 @@ export async function POST() {
       ''
     ).toLowerCase().trim()
 
-    // Collect every unique email address we have ever sent to
-    const sentRows = await prisma.sentEmail.findMany({
+    // Full allow-list: everyone we have successfully emailed (for cleanup + UI consistency).
+    // Gmail search only supports a limited `from:(a OR b OR …)` length, so we query the 50
+    // most *recently* interacted recipients — not an arbitrary DB order (fixes missing new mail).
+    const allRecipients = await prisma.sentEmail.findMany({
       where: { status: { not: 'failed' } },
       select: { toEmail: true },
       distinct: ['toEmail'],
     })
 
-    const recipientEmails = sentRows
+    const allowList = allRecipients
       .map(r => r.toEmail.toLowerCase().trim())
-      .filter(e => e && e !== myEmail)    // exclude ourselves
+      .filter(e => e && e !== myEmail)
 
-    if (recipientEmails.length === 0) {
+    if (allowList.length === 0) {
       return NextResponse.json({
         success: true,
         created: 0,
@@ -34,15 +36,32 @@ export async function POST() {
       })
     }
 
+    const recentSends = await prisma.sentEmail.findMany({
+      where: { status: { not: 'failed' } },
+      select: { toEmail: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    })
+
+    const seen = new Set<string>()
+    const queryRecipients: string[] = []
+    for (const row of recentSends) {
+      const e = row.toEmail.toLowerCase().trim()
+      if (!e || e === myEmail || seen.has(e)) continue
+      seen.add(e)
+      queryRecipients.push(e)
+      if (queryRecipients.length >= 50) break
+    }
+
     // Clean up any previously stored emails from non-history contacts
     const { count: cleaned } = await prisma.inboundEmail.deleteMany({
       where: {
-        fromEmail: { notIn: recipientEmails, mode: 'insensitive' },
+        fromEmail: { notIn: allowList, mode: 'insensitive' },
       },
     })
 
-    // Fetch only messages from those recipients
-    const messages = await fetchRepliesFromRecipients(recipientEmails, myEmail, 100)
+    // Fetch inbox messages from the recent-recipient subset (Gmail query cap)
+    const messages = await fetchRepliesFromRecipients(queryRecipients, myEmail, 100)
 
     let created = 0
     let skipped = 0
@@ -83,7 +102,10 @@ export async function POST() {
       created,
       skipped,
       cleaned,
-      checkedRecipients: recipientEmails.length,
+      /** Addresses included in the Gmail `from:(…)` search (max 50, most recent sends first). */
+      checkedRecipients: queryRecipients.length,
+      /** Total successful-send recipients in DB (allow-list size). */
+      allowListSize: allowList.length,
     })
   } catch (err: any) {
     console.error('[inbox/sync]', err)
