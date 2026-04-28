@@ -36,22 +36,23 @@ export async function POST() {
       })
     }
 
-    const recentSends = await prisma.sentEmail.findMany({
+    // 50 addresses we most recently emailed (by last SentEmail row per recipient).
+    // Scanning only the last N send *rows* can miss people if those rows repeat the same few recipients.
+    const grouped = await prisma.sentEmail.groupBy({
+      by: ['toEmail'],
       where: { status: { not: 'failed' } },
-      select: { toEmail: true },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
+      _max: { createdAt: true },
     })
 
-    const seen = new Set<string>()
-    const queryRecipients: string[] = []
-    for (const row of recentSends) {
-      const e = row.toEmail.toLowerCase().trim()
-      if (!e || e === myEmail || seen.has(e)) continue
-      seen.add(e)
-      queryRecipients.push(e)
-      if (queryRecipients.length >= 50) break
-    }
+    const queryRecipients = grouped
+      .map((g) => ({
+        email: g.toEmail.toLowerCase().trim(),
+        lastAt: g._max.createdAt?.getTime() ?? 0,
+      }))
+      .filter((g) => g.email && g.email !== myEmail)
+      .sort((a, b) => b.lastAt - a.lastAt)
+      .slice(0, 50)
+      .map((g) => g.email)
 
     // Clean up any previously stored emails from non-history contacts
     const { count: cleaned } = await prisma.inboundEmail.deleteMany({
@@ -61,7 +62,11 @@ export async function POST() {
     })
 
     // Fetch inbox messages from the recent-recipient subset (Gmail query cap)
-    const messages = await fetchRepliesFromRecipients(queryRecipients, myEmail, 100)
+    const { messages, listTotal, queryUsed } = await fetchRepliesFromRecipients(
+      queryRecipients,
+      myEmail,
+      100,
+    )
 
     let created = 0
     let skipped = 0
@@ -106,6 +111,19 @@ export async function POST() {
       checkedRecipients: queryRecipients.length,
       /** Total successful-send recipients in DB (allow-list size). */
       allowListSize: allowList.length,
+      /** Gmail list() hits before per-message download (0 = no matching threads for this query). */
+      gmailListTotal: listTotal,
+      /** inbox = `in:inbox` search; relaxed = fallback without inbox (still excludes sent/drafts/trash/spam). */
+      gmailQueryUsed: queryUsed,
+      /**
+       * Which mailbox we treat as “us” for self-send skip + env resolution.
+       * Set GOOGLE_INBOX_EMAIL on Vercel to the same account as the Gmail OAuth token.
+       */
+      mailboxHint: myEmail
+        ? `${myEmail.slice(0, 3)}…@${myEmail.split('@')[1] ?? '?'}`
+        : 'missing — set GOOGLE_INBOX_EMAIL or SMTP_USER',
+      /** First few query addresses (lowercase) — verify the sender you expect is in History `to` list. */
+      queryRecipientsSample: queryRecipients.slice(0, 8),
     })
   } catch (err: any) {
     console.error('[inbox/sync]', err)

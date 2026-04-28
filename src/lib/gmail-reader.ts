@@ -75,79 +75,126 @@ function extractBody(payload: any): { text: string; html: string } {
  * @param myEmail         - our own sending address (excluded from results)
  * @param maxResults      - max Gmail messages to fetch (default 100)
  */
+export type FetchRepliesResult = {
+  messages: GmailMessage[]
+  /** How many message IDs Gmail returned from list() before filtering. */
+  listTotal: number
+  /** Which search query matched (inbox vs relaxed). */
+  queryUsed: 'inbox' | 'relaxed'
+}
+
+function buildFromClause(recipientEmails: string[]): string {
+  return recipientEmails
+    .slice(0, 50)
+    .map((e) => e.toLowerCase().trim())
+    .filter(Boolean)
+    .join(' OR ')
+}
+
+async function mapInBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    const part = await Promise.all(batch.map(fn))
+    out.push(...part)
+  }
+  return out
+}
+
 export async function fetchRepliesFromRecipients(
   recipientEmails: string[],
   myEmail: string,
   maxResults = 100,
-): Promise<GmailMessage[]> {
-  if (recipientEmails.length === 0) return []
+): Promise<FetchRepliesResult> {
+  if (recipientEmails.length === 0) {
+    return { messages: [], listTotal: 0, queryUsed: 'inbox' }
+  }
 
   const gmail = getGmailClient()
+  const fromClause = buildFromClause(recipientEmails)
 
-  // Build Gmail search query: only messages FROM our recipients
-  // Gmail "from:" operator supports OR with spaces inside parens
-  const fromClause = recipientEmails
-    .slice(0, 50)                         // Gmail query has length limits
-    .map(e => e.toLowerCase().trim())
-    .join(' OR ')
-  const query = `from:(${fromClause}) in:inbox`
-
-  const listRes = await gmail.users.messages.list({
+  // Primary: messages still in Inbox. Some accounts/labels behave oddly — fallback below.
+  const inboxQuery = `from:(${fromClause}) in:inbox`
+  let listRes = await gmail.users.messages.list({
     userId: 'me',
-    q: query,
+    q: inboxQuery,
     maxResults,
   })
+  let messageRefs = listRes.data.messages ?? []
+  let queryUsed: 'inbox' | 'relaxed' = 'inbox'
 
-  const messageRefs = listRes.data.messages ?? []
-  if (messageRefs.length === 0) return []
+  if (messageRefs.length === 0) {
+    // Incoming mail not tagged as inbox in search — exclude obvious non-inbound folders.
+    const relaxedQuery = `from:(${fromClause}) -in:sent -in:drafts -in:trash -in:spam`
+    listRes = await gmail.users.messages.list({
+      userId: 'me',
+      q: relaxedQuery,
+      maxResults,
+    })
+    messageRefs = listRes.data.messages ?? []
+    queryUsed = 'relaxed'
+  }
 
-  // Fetch full message details in parallel (batch of up to maxResults)
-  const messages = await Promise.all(
-    messageRefs.map(async (ref) => {
-      try {
-        const msg = await gmail.users.messages.get({
-          userId: 'me',
-          id: ref.id!,
-          format: 'full',
-        })
+  const listTotal = messageRefs.length
+  if (messageRefs.length === 0) {
+    return { messages: [], listTotal: 0, queryUsed }
+  }
 
-        const headers: Record<string, string> = {}
-        for (const h of msg.data.payload?.headers ?? []) {
-          headers[h.name!.toLowerCase()] = h.value ?? ''
-        }
+  const my = myEmail.toLowerCase().trim()
 
-        const from = parseAddress(headers['from'] ?? '')
+  // Batch fetches — avoids Vercel timeouts and Gmail rate spikes vs one huge Promise.all.
+  const messages = await mapInBatches(messageRefs, 12, async (ref) => {
+    try {
+      const msg = await gmail.users.messages.get({
+        userId: 'me',
+        id: ref.id!,
+        format: 'full',
+      })
 
-        // Skip messages where we are the sender (self-loop / echo prevention)
-        if (from.email.toLowerCase() === myEmail.toLowerCase()) return null
-
-        const toRaw = headers['to'] ?? myEmail
-        const toEmail = parseAddress(toRaw).email || toRaw
-        const subject = headers['subject'] ?? '(no subject)'
-        const inReplyTo = headers['in-reply-to'] || null
-        const dateMs = parseInt(msg.data.internalDate ?? '0', 10)
-        const receivedAt = new Date(dateMs)
-
-        const { text, html } = extractBody(msg.data.payload)
-
-        return {
-          gmailId: msg.data.id!,
-          threadId: msg.data.threadId ?? '',
-          fromName: from.name,
-          fromEmail: from.email,
-          toEmail,
-          subject,
-          bodyText: text,
-          bodyHtml: html,
-          snippet: msg.data.snippet ?? '',
-          inReplyTo,
-          receivedAt,
-        } satisfies GmailMessage
-      } catch {
-        return null
+      const headers: Record<string, string> = {}
+      for (const h of msg.data.payload?.headers ?? []) {
+        headers[h.name!.toLowerCase()] = h.value ?? ''
       }
-    }),
-  )
 
-  return messages.filter((m): m is GmailMessage => m !== null)
+      const from = parseAddress(headers['from'] ?? '')
+
+      // Skip messages where we are the sender (self-loop / echo prevention)
+      if (from.email.toLowerCase() === my) return null
+
+      const toRaw = headers['to'] ?? myEmail
+      const toEmail = parseAddress(toRaw).email || toRaw
+      const subject = headers['subject'] ?? '(no subject)'
+      const inReplyTo = headers['in-reply-to'] || null
+      const dateMs = parseInt(msg.data.internalDate ?? '0', 10)
+      const receivedAt = new Date(dateMs)
+
+      const { text, html } = extractBody(msg.data.payload)
+
+      return {
+        gmailId: msg.data.id!,
+        threadId: msg.data.threadId ?? '',
+        fromName: from.name,
+        fromEmail: from.email,
+        toEmail,
+        subject,
+        bodyText: text,
+        bodyHtml: html,
+        snippet: msg.data.snippet ?? '',
+        inReplyTo,
+        receivedAt,
+      } satisfies GmailMessage
+    } catch {
+      return null
+    }
+  })
+
+  return {
+    messages: messages.filter((m): m is GmailMessage => m !== null),
+    listTotal,
+    queryUsed,
+  }
 }
