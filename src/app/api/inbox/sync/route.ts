@@ -3,20 +3,57 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { fetchRepliesFromRecipients } from '@/lib/gmail-reader'
+import { getGoogleInboxEmail } from '@/lib/google-oauth'
+
+function getSyncErrorMeta(err: unknown): {
+  message: string
+  providerError: string
+  providerDescription: string
+  status?: number
+  code?: number | string
+} {
+  const e = err as {
+    message?: string
+    code?: number | string
+    status?: number
+    response?: { data?: { error?: string; error_description?: string }; status?: number }
+  }
+
+  return {
+    message: e?.message ?? 'Sync failed',
+    providerError: e?.response?.data?.error ?? '',
+    providerDescription: e?.response?.data?.error_description ?? '',
+    status: e?.response?.status ?? e?.status,
+    code: e?.code,
+  }
+}
+
+function formatSyncError(err: unknown): string {
+  const meta = getSyncErrorMeta(err)
+  const providerError = meta.providerError
+  const providerDescription = meta.providerDescription
+  const baseMessage = meta.message
+
+  if (providerError === 'invalid_grant' || baseMessage === 'invalid_grant') {
+    return [
+      'Google inbox authorization expired or was revoked.',
+      'Reconnect Gmail from Settings -> Gmail Inbox OAuth,',
+      'or update GOOGLE_REFRESH_TOKEN and redeploy.',
+    ].join(' ')
+  }
+
+  return providerDescription || baseMessage
+}
 
 // POST /api/inbox/sync
-// Only fetches Gmail messages FROM people we have previously emailed — not the whole inbox.
+// Only fetches Gmail messages FROM people we have previously emailed, not the whole inbox.
 export async function POST() {
   try {
-    const myEmail = (
-      process.env.GOOGLE_INBOX_EMAIL ||
-      process.env.SMTP_USER ||
-      ''
-    ).toLowerCase().trim()
+    const myEmail = await getGoogleInboxEmail()
 
     // Full allow-list: everyone we have successfully emailed (for cleanup + UI consistency).
-    // Gmail search only supports a limited `from:(a OR b OR …)` length, so we query the 50
-    // most *recently* interacted recipients — not an arbitrary DB order (fixes missing new mail).
+    // Gmail search supports limited from:(a OR b ...) length, so we query the 50
+    // most recently interacted recipients rather than arbitrary DB order.
     const allRecipients = await prisma.sentEmail.findMany({
       where: { status: { not: 'failed' } },
       select: { toEmail: true },
@@ -24,8 +61,8 @@ export async function POST() {
     })
 
     const allowList = allRecipients
-      .map(r => r.toEmail.toLowerCase().trim())
-      .filter(e => e && e !== myEmail)
+      .map((r) => r.toEmail.toLowerCase().trim())
+      .filter((e) => e && e !== myEmail)
 
     if (allowList.length === 0) {
       return NextResponse.json({
@@ -36,8 +73,7 @@ export async function POST() {
       })
     }
 
-    // 50 addresses we most recently emailed (by last SentEmail row per recipient).
-    // Scanning only the last N send *rows* can miss people if those rows repeat the same few recipients.
+    // 50 addresses we most recently emailed (based on max sent row per recipient).
     const grouped = await prisma.sentEmail.groupBy({
       by: ['toEmail'],
       where: { status: { not: 'failed' } },
@@ -54,14 +90,13 @@ export async function POST() {
       .slice(0, 50)
       .map((g) => g.email)
 
-    // Clean up any previously stored emails from non-history contacts
+    // Remove previously stored inbound messages from non-history contacts.
     const { count: cleaned } = await prisma.inboundEmail.deleteMany({
       where: {
         fromEmail: { notIn: allowList, mode: 'insensitive' },
       },
     })
 
-    // Fetch inbox messages from the recent-recipient subset (Gmail query cap)
     const { messages, listTotal, queryUsed } = await fetchRepliesFromRecipients(
       queryRecipients,
       myEmail,
@@ -72,13 +107,14 @@ export async function POST() {
     let skipped = 0
 
     for (const msg of messages) {
-      // Skip if already stored (deduplication by Gmail message ID)
       const existing = await prisma.inboundEmail.findUnique({
         where: { gmailId: msg.gmailId },
       })
-      if (existing) { skipped++; continue }
+      if (existing) {
+        skipped++
+        continue
+      }
 
-      // Link to the most recent outbound SentEmail sent TO this person
       const match = await prisma.sentEmail.findFirst({
         where: { toEmail: { equals: msg.fromEmail, mode: 'insensitive' } },
         orderBy: { createdAt: 'desc' },
@@ -107,28 +143,24 @@ export async function POST() {
       created,
       skipped,
       cleaned,
-      /** Addresses included in the Gmail `from:(…)` search (max 50, most recent sends first). */
       checkedRecipients: queryRecipients.length,
-      /** Total successful-send recipients in DB (allow-list size). */
       allowListSize: allowList.length,
-      /** Gmail list() hits before per-message download (0 = no matching threads for this query). */
       gmailListTotal: listTotal,
-      /** inbox = `in:inbox` search; relaxed = fallback without inbox (still excludes sent/drafts/trash/spam). */
       gmailQueryUsed: queryUsed,
-      /**
-       * Which mailbox we treat as “us” for self-send skip + env resolution.
-       * Set GOOGLE_INBOX_EMAIL on Vercel to the same account as the Gmail OAuth token.
-       */
-      mailboxHint: myEmail
-        ? `${myEmail.slice(0, 3)}…@${myEmail.split('@')[1] ?? '?'}`
-        : 'missing — set GOOGLE_INBOX_EMAIL or SMTP_USER',
-      /** First few query addresses (lowercase) — verify the sender you expect is in History `to` list. */
+      mailboxHint: myEmail ? `${myEmail.slice(0, 3)}...@${myEmail.split('@')[1] ?? '?'}` : 'missing',
       queryRecipientsSample: queryRecipients.slice(0, 8),
     })
-  } catch (err: any) {
-    console.error('[inbox/sync]', err)
+  } catch (err: unknown) {
+    const meta = getSyncErrorMeta(err)
+    console.error('[inbox/sync]', {
+      message: meta.message,
+      providerError: meta.providerError,
+      providerDescription: meta.providerDescription,
+      status: meta.status,
+      code: meta.code,
+    })
     return NextResponse.json(
-      { error: err?.message ?? 'Sync failed' },
+      { error: formatSyncError(err) },
       { status: 500 },
     )
   }

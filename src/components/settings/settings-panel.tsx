@@ -10,16 +10,21 @@ import {
   ServerIcon,
   UserIcon,
   SaveIcon,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
 } from 'lucide-react'
 
-type ProviderId = 'smtp' | 'resend' | 'microsoft'
-
 interface SettingsData {
-  active: ProviderId
+  active: 'smtp'
   source: 'db' | 'env'
   smtp: { configured: boolean; host: string | null; user: string | null; mailFrom: string | null }
-  resend: { configured: boolean; fromEmail: string | null }
-  microsoft: { configured: boolean; mailbox: string | null }
+  googleInbox: {
+    configured: boolean
+    source: 'db' | 'env' | 'none'
+    connectedEmail: string | null
+    tokenUpdatedAt: string | null
+    encryptionEnabled: boolean
+    oauthClientConfigured: boolean
+  }
 }
 
 interface TestResult {
@@ -75,16 +80,14 @@ function TestResultBox({ result }: { result: TestResult }) {
 export function SettingsPanel() {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loadingSettings, setLoadingSettings] = useState(true)
-  const [switching, setSwitching] = useState<ProviderId | null>(null)
 
   const [smtpTest, setSmtpTest] = useState<TestResult | null>(null)
   const [smtpTestState, setSmtpTestState] = useState<TestState>('idle')
-
-  const [resendTest, setResendTest] = useState<TestResult | null>(null)
-  const [resendTestState, setResendTestState] = useState<TestState>('idle')
-
-  const [msTest, setMsTest] = useState<TestResult | null>(null)
-  const [msTestState, setMsTestState] = useState<TestState>('idle')
+  const [connectingGoogle, setConnectingGoogle] = useState(false)
+  const [googleOauthNotice, setGoogleOauthNotice] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
 
   // Sender config state
   const [senderName, setSenderName]   = useState('')
@@ -94,6 +97,22 @@ export function SettingsPanel() {
   const [senderSaved, setSenderSaved]   = useState(false)
   const [senderError, setSenderError]   = useState<string | null>(null)
 
+  function normalizeSettings(data: Partial<SettingsData>): SettingsData {
+    return {
+      active: 'smtp',
+      source: (data.source ?? 'env') as 'db' | 'env',
+      smtp: data.smtp ?? { configured: false, host: null, user: null, mailFrom: null },
+      googleInbox: data.googleInbox ?? {
+        configured: false,
+        source: 'none',
+        connectedEmail: null,
+        tokenUpdatedAt: null,
+        encryptionEnabled: false,
+        oauthClientConfigured: false,
+      },
+    }
+  }
+
   async function loadSettings() {
     setLoadingSettings(true)
     try {
@@ -101,7 +120,8 @@ export function SettingsPanel() {
         fetch('/api/settings'),
         fetch('/api/settings/sender'),
       ])
-      setSettings(await settingsRes.json())
+      const rawSettings = await settingsRes.json()
+      setSettings(normalizeSettings(rawSettings))
       const s = await senderRes.json()
       setSenderName(s.name ?? '')
       setSenderEmail(s.email ?? '')
@@ -111,7 +131,38 @@ export function SettingsPanel() {
     }
   }
 
-  useEffect(() => { loadSettings() }, [])
+  useEffect(() => {
+    loadSettings()
+
+    const params = new URLSearchParams(window.location.search)
+    const oauthStatus = params.get('google_oauth')
+    const reason = params.get('reason')
+    if (!oauthStatus) return
+
+    if (oauthStatus === 'connected') {
+      setGoogleOauthNotice({
+        type: 'success',
+        message: 'Gmail inbox connected successfully. Future token updates will stay on backend.',
+      })
+      void loadSettings()
+    } else {
+      setGoogleOauthNotice({
+        type: 'error',
+        message: `Gmail reconnect failed${reason ? ` (${reason})` : ''}.`,
+      })
+    }
+
+    params.delete('google_oauth')
+    params.delete('reason')
+    const nextQuery = params.toString()
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
+    window.history.replaceState({}, '', nextUrl)
+  }, [])
+
+  function startGoogleReconnect() {
+    setConnectingGoogle(true)
+    window.location.href = '/api/oauth/google/start?returnTo=/settings'
+  }
 
   async function saveSender() {
     setSavingSender(true)
@@ -136,32 +187,16 @@ export function SettingsPanel() {
     }
   }
 
-  async function switchProvider(provider: ProviderId) {
-    setSwitching(provider)
+  async function runSmtpTest() {
+    setSmtpTestState('loading')
+    setSmtpTest(null)
     try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider }),
-      })
-      await loadSettings()
-    } finally {
-      setSwitching(null)
-    }
-  }
-
-  async function runTest(provider: ProviderId) {
-    const setTest = provider === 'smtp' ? setSmtpTest : provider === 'resend' ? setResendTest : setMsTest
-    const setState = provider === 'smtp' ? setSmtpTestState : provider === 'resend' ? setResendTestState : setMsTestState
-    setState('loading')
-    setTest(null)
-    try {
-      const res = await fetch(`/api/settings/test/${provider}`)
-      setTest(await res.json())
+      const res = await fetch('/api/settings/test/smtp')
+      setSmtpTest(await res.json())
     } catch (e) {
-      setTest({ ok: false, error: e instanceof Error ? e.message : 'Request failed' })
+      setSmtpTest({ ok: false, error: e instanceof Error ? e.message : 'Request failed' })
     } finally {
-      setState('done')
+      setSmtpTestState('done')
     }
   }
 
@@ -176,45 +211,15 @@ export function SettingsPanel() {
 
   if (!settings) return <p className="text-rose-400">Failed to load settings.</p>
 
-  const providers: Array<{
-    id: ProviderId
-    name: string
-    description: string
-    configured: boolean
-    detail: string | null
-    testState: TestState
-    testResult: TestResult | null
-  }> = [
-    {
-      id: 'smtp',
-      name: 'Google SMTP (Gmail)',
-      description: 'Send via Gmail using an App Password and nodemailer. Best for company emails. No domain setup needed.',
-      configured: settings.smtp.configured,
-      detail: settings.smtp.user
-        ? `From: ${settings.smtp.mailFrom || settings.smtp.user} via ${settings.smtp.host}`
-        : 'SMTP_HOST / SMTP_USER / SMTP_PASS not set',
-      testState: smtpTestState,
-      testResult: smtpTest,
-    },
-    {
-      id: 'resend',
-      name: 'Resend',
-      description: 'Transactional email API with full open/click/bounce webhook tracking.',
-      configured: settings.resend.configured,
-      detail: settings.resend.fromEmail ? `From: ${settings.resend.fromEmail}` : 'RESEND_API_KEY not set',
-      testState: resendTestState,
-      testResult: resendTest,
-    },
-    {
-      id: 'microsoft',
-      name: 'Microsoft Graph',
-      description: 'Send via Microsoft 365 org mailbox. Requires Azure app + Mail.Send permission.',
-      configured: settings.microsoft.configured,
-      detail: settings.microsoft.mailbox ? `Mailbox: ${settings.microsoft.mailbox}` : 'MS_GRAPH_MAILBOX not set',
-      testState: msTestState,
-      testResult: msTest,
-    },
-  ]
+  const googleSourceLabel =
+    settings.googleInbox.source === 'db'
+      ? 'Stored in database'
+      : settings.googleInbox.source === 'env'
+      ? 'Using env fallback'
+      : 'Not connected'
+  const googleUpdatedLabel = settings.googleInbox.tokenUpdatedAt
+    ? new Date(settings.googleInbox.tokenUpdatedAt).toLocaleString()
+    : null
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -291,104 +296,140 @@ export function SettingsPanel() {
         </button>
       </div>
 
-      {/* Active provider */}
+      {/* Active provider banner */}
       <div className="card flex items-center gap-3">
         <ServerIcon className="w-5 h-5 text-indigo-300 shrink-0" />
         <div>
           <p className="text-sm text-slate-300">
-            Active provider:{' '}
-            <span className="font-semibold text-white capitalize">
-              {settings.active === 'smtp' ? 'Google SMTP (Gmail)' : settings.active}
-            </span>
-            <span className="ml-2 text-xs text-slate-500">
-              ({settings.source === 'db' ? 'set via UI' : 'from env var'})
-            </span>
+            Active provider: <span className="font-semibold text-white">Google SMTP (Gmail)</span>
           </p>
           <p className="text-xs text-slate-500 mt-0.5">
-            Switch below to change which provider sends your campaigns.
+            All emails are sent via Gmail SMTP using your App Password.
           </p>
         </div>
       </div>
 
-      {/* Provider cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {providers.map((p) => {
-          const isActive = settings.active === p.id
-          const isSwitching = switching === p.id
-          const isLoading = p.testState === 'loading'
+      {/* Gmail inbox OAuth for reply sync */}
+      <div className="card space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-semibold text-white text-sm">Gmail Inbox OAuth</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Used by Inbox Sync to read replies. Keeps refresh token on backend.
+            </p>
+          </div>
+          <span
+            className={`text-xs px-2 py-0.5 rounded border ${
+              settings.googleInbox.configured
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
+                : 'bg-rose-500/15 text-rose-300 border-rose-500/25'
+            }`}
+          >
+            {settings.googleInbox.configured ? 'Connected' : 'Not connected'}
+          </span>
+        </div>
 
-          return (
-            <div
-              key={p.id}
-              className={`card space-y-4 transition-colors ${isActive ? 'border-indigo-400/40 bg-indigo-500/5' : ''}`}
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${p.configured ? 'bg-emerald-400' : 'bg-rose-400'}`}
-                  />
-                  <h3 className="font-semibold text-white text-sm">{p.name}</h3>
-                  {isActive && (
-                    <span className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-2 py-0.5 rounded">
-                      Active
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">{p.description}</p>
-              </div>
+        {googleOauthNotice && (
+          <p
+            className={`text-xs flex items-center gap-1 ${
+              googleOauthNotice.type === 'success' ? 'text-emerald-300' : 'text-rose-300'
+            }`}
+          >
+            {googleOauthNotice.type === 'success' ? (
+              <CheckCircle2Icon className="w-3.5 h-3.5" />
+            ) : (
+              <XCircleIcon className="w-3.5 h-3.5" />
+            )}
+            {googleOauthNotice.message}
+          </p>
+        )}
 
-              <p className={`text-xs ${p.configured ? 'text-slate-400' : 'text-rose-400'}`}>
-                {p.detail}
-              </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3">
+            <p className="text-slate-500">Token source</p>
+            <p className="text-slate-200 mt-0.5">{googleSourceLabel}</p>
+          </div>
+          <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-3">
+            <p className="text-slate-500">Connected inbox</p>
+            <p className="text-slate-200 mt-0.5">{settings.googleInbox.connectedEmail || 'Unknown'}</p>
+          </div>
+        </div>
 
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => runTest(p.id)}
-                  disabled={isLoading || !p.configured}
-                  className="button-secondary w-full justify-center disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <LoaderIcon className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ZapIcon className="w-4 h-4" />
-                  )}
-                  {isLoading ? 'Testing…' : 'Test Connection'}
-                </button>
+        <div className="text-xs text-slate-500 space-y-1">
+          <p>
+            Last token update: <span className="text-slate-300">{googleUpdatedLabel ?? 'n/a'}</span>
+          </p>
+          {!settings.googleInbox.encryptionEnabled && (
+            <p className="text-amber-300 flex items-start gap-1">
+              <AlertTriangleIcon className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              Set <code className="bg-slate-800 px-1 rounded text-slate-200">GOOGLE_TOKEN_ENCRYPTION_KEY</code> to encrypt DB-stored refresh tokens.
+            </p>
+          )}
+          {!settings.googleInbox.oauthClientConfigured && (
+            <p className="text-rose-300">
+              Missing <code className="bg-slate-800 px-1 rounded text-slate-200">GOOGLE_CLIENT_ID</code> or
+              <code className="bg-slate-800 px-1 rounded text-slate-200 ml-1">GOOGLE_CLIENT_SECRET</code>.
+            </p>
+          )}
+        </div>
 
-                {!isActive && (
-                  <button
-                    onClick={() => switchProvider(p.id)}
-                    disabled={isSwitching || !p.configured}
-                    className="button-primary w-full justify-center disabled:opacity-50"
-                  >
-                    {isSwitching ? (
-                      <LoaderIcon className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2Icon className="w-4 h-4" />
-                    )}
-                    {isSwitching ? 'Switching…' : 'Set as Active'}
-                  </button>
-                )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={startGoogleReconnect}
+            disabled={connectingGoogle || !settings.googleInbox.oauthClientConfigured}
+            className="button-primary disabled:opacity-50"
+          >
+            {connectingGoogle ? (
+              <LoaderIcon className="w-4 h-4 animate-spin" />
+            ) : (
+              <ZapIcon className="w-4 h-4" />
+            )}
+            {connectingGoogle ? 'Redirecting...' : settings.googleInbox.configured ? 'Reconnect Gmail' : 'Connect Gmail'}
+          </button>
+          <span className="text-xs text-slate-500">
+            Keeps working URL and updates backend token safely.
+          </span>
+        </div>
+      </div>
 
-                {isActive && (
-                  <div className="text-xs text-center text-indigo-300 py-1">
-                    ✓ Currently active
-                  </div>
-                )}
-              </div>
-
-              {p.testResult && <TestResultBox result={p.testResult} />}
-            </div>
-          )
-        })}
+      {/* SMTP card */}
+      <div className="card space-y-4 border-indigo-400/40 bg-indigo-500/5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${settings.smtp.configured ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+            <h3 className="font-semibold text-white text-sm">Google SMTP (Gmail)</h3>
+            <span className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 px-2 py-0.5 rounded">Active</span>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Sends via Gmail using an App Password and Nodemailer. 500 emails/day on free Gmail.
+          </p>
+        </div>
+        <p className={`text-xs ${settings.smtp.configured ? 'text-slate-400' : 'text-rose-400'}`}>
+          {settings.smtp.user
+            ? `From: ${settings.smtp.mailFrom || settings.smtp.user} via ${settings.smtp.host}`
+            : 'SMTP_HOST / SMTP_USER / SMTP_PASS not set in environment'}
+        </p>
+        <button
+          onClick={runSmtpTest}
+          disabled={smtpTestState === 'loading' || !settings.smtp.configured}
+          className="button-secondary w-full justify-center disabled:opacity-50"
+        >
+          {smtpTestState === 'loading' ? (
+            <LoaderIcon className="w-4 h-4 animate-spin" />
+          ) : (
+            <ZapIcon className="w-4 h-4" />
+          )}
+          {smtpTestState === 'loading' ? 'Testing…' : 'Test Connection'}
+        </button>
+        {smtpTest && <TestResultBox result={smtpTest} />}
       </div>
 
       {/* Env reference */}
       <div className="card space-y-3">
         <h3 className="font-semibold text-white text-sm">Environment variables reference</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div className="space-y-1">
-            <p className="text-emerald-300 font-semibold">Google SMTP</p>
+            <p className="text-emerald-300 font-semibold">Gmail SMTP (sending)</p>
             <code className="block text-slate-400">SMTP_HOST=smtp.gmail.com</code>
             <code className="block text-slate-400">SMTP_PORT=587</code>
             <code className="block text-slate-400">SMTP_USER=you@gmail.com</code>
@@ -396,17 +437,12 @@ export function SettingsPanel() {
             <code className="block text-slate-400">MAIL_FROM="Name &lt;you@gmail.com&gt;"</code>
           </div>
           <div className="space-y-1">
-            <p className="text-indigo-300 font-semibold">Resend</p>
-            <code className="block text-slate-400">RESEND_API_KEY</code>
-            <code className="block text-slate-400">RESEND_FROM_EMAIL</code>
-            <code className="block text-slate-400">RESEND_WEBHOOK_SECRET</code>
-          </div>
-          <div className="space-y-1">
-            <p className="text-violet-300 font-semibold">Microsoft Graph</p>
-            <code className="block text-slate-400">AZURE_TENANT_ID</code>
-            <code className="block text-slate-400">AZURE_CLIENT_ID</code>
-            <code className="block text-slate-400">AZURE_CLIENT_SECRET</code>
-            <code className="block text-slate-400">MS_GRAPH_MAILBOX</code>
+            <p className="text-cyan-300 font-semibold">Gmail Inbox OAuth (receiving)</p>
+            <code className="block text-slate-400">GOOGLE_CLIENT_ID</code>
+            <code className="block text-slate-400">GOOGLE_CLIENT_SECRET</code>
+            <code className="block text-slate-400">GOOGLE_INBOX_EMAIL</code>
+            <code className="block text-slate-400">GOOGLE_REFRESH_TOKEN (fallback)</code>
+            <code className="block text-slate-400">GOOGLE_TOKEN_ENCRYPTION_KEY</code>
           </div>
         </div>
       </div>
