@@ -406,7 +406,7 @@ export default function InboxClient() {
                 </div>
               </div>
 
-              {/* Linked outbound email banner */}
+              {/* Linked outbound email banner — only shown for genuine replies */}
               {selected.sentEmail && (
                 <div className="mx-6 mt-4 p-3 rounded-xl bg-violet-950/40 border border-violet-800/40 flex items-start gap-3">
                   <LinkIcon className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
@@ -428,9 +428,11 @@ export default function InboxClient() {
                 </div>
               )}
 
-              {/* ── Their reply content ── */}
+              {/* ── Message body ── */}
               <div className="px-6 pt-5 pb-2">
-                <p className="text-[11px] uppercase tracking-widest font-semibold text-violet-400 mb-3">Their Reply</p>
+                <p className="text-[11px] uppercase tracking-widest font-semibold text-violet-400 mb-3">
+                  {selected.sentEmail ? 'Their Reply' : 'Message'}
+                </p>
                 <EmailFrame
                   html={selected.bodyHtml}
                   text={selected.bodyText}
@@ -438,7 +440,7 @@ export default function InboxClient() {
                 />
               </div>
 
-              {/* ── Original email you sent (collapsible) ── */}
+              {/* ── Original email you sent — only shown for genuine replies ── */}
               {selected.sentEmail?.body && (
                 <div className="px-6 pb-6 pt-3">
                   <p className="text-[11px] uppercase tracking-widest font-semibold text-slate-500 mb-3">Your Original Email</p>

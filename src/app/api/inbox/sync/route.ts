@@ -115,10 +115,17 @@ export async function POST() {
         continue
       }
 
-      const match = await prisma.sentEmail.findFirst({
-        where: { toEmail: { equals: msg.fromEmail, mode: 'insensitive' } },
-        orderBy: { createdAt: 'desc' },
-      })
+      // Link to the most recent outbound SentEmail sent TO this person,
+      // BUT only if the message has an In-Reply-To header (genuine reply).
+      // Fresh messages from the same contact are stored as standalone (sentEmailId: null).
+      let matchId: string | null = null
+      if (msg.inReplyTo) {
+        const match = await prisma.sentEmail.findFirst({
+          where: { toEmail: { equals: msg.fromEmail, mode: 'insensitive' } },
+          orderBy: { createdAt: 'desc' },
+        })
+        matchId = match?.id ?? null
+      }
 
       await prisma.inboundEmail.create({
         data: {
@@ -132,7 +139,7 @@ export async function POST() {
           bodyHtml: msg.bodyHtml || null,
           snippet: msg.snippet || null,
           receivedAt: msg.receivedAt,
-          sentEmailId: match?.id ?? null,
+          sentEmailId: matchId,
         },
       })
       created++
