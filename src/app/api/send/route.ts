@@ -45,8 +45,7 @@ export async function POST(req: NextRequest) {
 <table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;font-size:13px;color:#333333;border-top:2px solid #c8a94a;padding-top:12px;margin-top:12px;">
   <tr>
     <td style="padding-right:20px;vertical-align:middle;border-right:1px solid #cccccc;">
-      <p style="margin:0;font-weight:bold;color:#1a1a2e;">Mohammed Ali</p>
-      <p style="margin:2px 0 0 0;color:#666666;font-size:12px;">IT Manager</p>
+      <p style="margin:0;font-weight:bold;color:#1a1a2e;">HR Department</p>
     </td>
     <td style="padding:0 20px;vertical-align:middle;border-right:1px solid #cccccc;">
       <img src="http://tanseeqinvestment.com/wp-content/uploads/2019/07/logo-banner.png"
@@ -57,7 +56,7 @@ export async function POST(req: NextRequest) {
       <p style="margin:0;">P O Box: 3151, Dubai, UAE</p>
       <p style="margin:0;">Tel: +971 4 2770244</p>
       <p style="margin:0;">Mob: +971 55 3006512</p>
-      <p style="margin:0;"><a href="mailto:mohammedali@tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">mohammedali@tanseeqinvestment.com</a></p>
+      <p style="margin:0;"><a href="mailto:hr-notify@tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">hr-notify@tanseeqinvestment.com</a></p>
       <p style="margin:0;"><a href="https://www.tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">www.tanseeqinvestment.com</a></p>
     </td>
   </tr>
