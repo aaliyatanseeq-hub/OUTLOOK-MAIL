@@ -228,16 +228,13 @@ export default function RespondPage() {
         </div>
 
         {/* Notice box */}
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 space-y-1.5">
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 space-y-1">
           <div className="flex items-center gap-2">
             <ShieldCheckIcon className="w-4 h-4 text-indigo-400 shrink-0" />
-            <p className="text-xs font-semibold text-indigo-300 uppercase tracking-wide">Official HR Records Update</p>
+            <p className="text-xs font-semibold text-slate-300 tracking-wide">Employee Records Verification</p>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            This form is part of an official employee records update by Tanseeq Investment LLC. Please ensure all information entered matches your official HR records exactly.
-          </p>
-          <p className="text-xs text-amber-400/80 font-medium">
-            Do not share this link. It is uniquely assigned to you.
+            As part of our periodic records maintenance, kindly verify and submit your current contact details. Please ensure the information provided is accurate and up to date.
           </p>
         </div>
 
@@ -301,7 +298,7 @@ export default function RespondPage() {
         </form>
 
         <p className="text-center text-xs text-slate-600">
-          This link is strictly personal and intended solely for <span className="text-slate-500">{info?.toEmail}</span>. Sharing this link is not permitted.
+          This submission is associated with <span className="text-slate-500">{info?.toEmail}</span>.
         </p>
       </div>
     </Shell>
