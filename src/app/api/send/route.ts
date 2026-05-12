@@ -37,8 +37,33 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000'
   const responseLink = `${appUrl}/respond/${responseToken}`
 
-  const renderedSubject = renderTemplate(subject,      { name: toName.trim(), email: toEmail.trim() })
+  const renderedSubject = renderTemplate(subject, { name: toName.trim(), email: toEmail.trim() })
   const renderedBody    = renderTemplate(bodyTemplate, { name: toName.trim(), email: toEmail.trim(), responseLink })
+
+  const signature = `
+<br/><br/>
+<table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;font-size:13px;color:#333333;border-top:2px solid #c8a94a;padding-top:12px;margin-top:12px;">
+  <tr>
+    <td style="padding-right:20px;vertical-align:middle;border-right:1px solid #cccccc;">
+      <p style="margin:0;font-weight:bold;color:#1a1a2e;">Mohammed Ali</p>
+      <p style="margin:2px 0 0 0;color:#666666;font-size:12px;">IT Manager</p>
+    </td>
+    <td style="padding:0 20px;vertical-align:middle;border-right:1px solid #cccccc;">
+      <img src="http://tanseeqinvestment.com/wp-content/uploads/2019/07/logo-banner.png"
+           alt="Tanseeq Investment" width="120" style="display:block;" />
+    </td>
+    <td style="padding-left:20px;vertical-align:middle;font-size:12px;color:#444444;line-height:1.6;">
+      <p style="margin:0;font-weight:bold;color:#1a1a2e;">Tanseeq Investment LLC</p>
+      <p style="margin:0;">P O Box: 3151, Dubai, UAE</p>
+      <p style="margin:0;">Tel: +971 4 2770244</p>
+      <p style="margin:0;">Mob: +971 55 3006512</p>
+      <p style="margin:0;"><a href="mailto:mohammedali@tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">mohammedali@tanseeqinvestment.com</a></p>
+      <p style="margin:0;"><a href="https://www.tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">www.tanseeqinvestment.com</a></p>
+    </td>
+  </tr>
+</table>`
+
+  const finalBody = renderedBody + signature
 
   // Resolve sender: DB settings → env vars
   const sender = await getSenderConfig()
@@ -50,7 +75,7 @@ export async function POST(req: NextRequest) {
     to:      toEmail.trim(),
     from,
     subject: renderedSubject,
-    html:    renderedBody,
+    html:    finalBody,
   })
 
   const sent = await prisma.sentEmail.create({
@@ -60,7 +85,7 @@ export async function POST(req: NextRequest) {
       toEmail:           toEmail.trim(),
       replyTo:           null,
       subject:           renderedSubject,
-      body:              renderedBody,
+      body:              finalBody,
       provider:          providerId,
       providerMessageId: result.messageId || null,
       responseToken,
