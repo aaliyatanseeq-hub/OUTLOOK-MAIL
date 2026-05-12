@@ -64,6 +64,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
   // Sending state
   const [sending, setSending] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [results, setResults] = useState<SendResult[]>([])
   const [singleResult, setSingleResult] = useState<{ success: boolean; error?: string } | null>(null)
@@ -138,6 +139,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
 
   function handleReviewClick(e: React.FormEvent) {
     e.preventDefault()
+    setPreviewIndex(0)
     setShowPreviewModal(true)
   }
 
@@ -170,9 +172,14 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
 
   const validRecipients = recipients.filter((r) => !r.error)
   const invalidRecipients = recipients.filter((r) => r.error)
-  const previewName  = mode === 'manual' ? toName  : (validRecipients[0]?.name  || 'Employee')
-  const previewEmail = mode === 'manual' ? toEmail : (validRecipients[0]?.email || 'employee@example.com')
-  const previewHtml  = renderTpl(body, previewName, previewEmail)
+
+  // Preview helpers
+  const previewList = mode === 'manual'
+    ? [{ name: toName || 'Recipient', email: toEmail || 'recipient@example.com' }]
+    : validRecipients
+  const currentPreview = previewList[previewIndex] ?? previewList[0]
+  const previewHtml = renderTpl(body, currentPreview?.name ?? '', currentPreview?.email ?? '')
+  const previewSubject = renderTpl(subject, currentPreview?.name ?? '', currentPreview?.email ?? '')
 
   const successCount = results.filter((r) => r.success).length
   const failCount = results.filter((r) => !r.success).length
@@ -422,14 +429,15 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Modal header */}
+
+            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
               <div>
-                <p className="text-sm font-semibold text-white">Email Preview</p>
+                <p className="text-sm font-semibold text-white">Review Email</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {mode === 'manual'
-                    ? 'This is exactly what the recipient will receive.'
-                    : `Showing preview for first recipient. Will send to ${validRecipients.length} people.`}
+                  {previewList.length === 1
+                    ? 'Review before sending.'
+                    : `Reviewing ${previewIndex + 1} of ${previewList.length} emails`}
                 </p>
               </div>
               <button onClick={() => setShowPreviewModal(false)} className="text-slate-500 hover:text-white transition-colors">
@@ -437,35 +445,65 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
               </button>
             </div>
 
+            {/* Navigation bar (bulk only) */}
+            {previewList.length > 1 && (
+              <div className="flex items-center justify-between px-6 py-2.5 border-b border-slate-800 bg-slate-950/40 shrink-0">
+                <button
+                  onClick={() => setPreviewIndex(i => Math.max(0, i - 1))}
+                  disabled={previewIndex === 0}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  ← Previous
+                </button>
+                <div className="flex items-center gap-1.5">
+                  {previewList.slice(Math.max(0, previewIndex - 2), previewIndex + 3).map((_, relIdx) => {
+                    const absIdx = Math.max(0, previewIndex - 2) + relIdx
+                    return (
+                      <button
+                        key={absIdx}
+                        onClick={() => setPreviewIndex(absIdx)}
+                        className={`w-2 h-2 rounded-full transition-colors ${absIdx === previewIndex ? 'bg-indigo-400' : 'bg-slate-700 hover:bg-slate-500'}`}
+                      />
+                    )
+                  })}
+                  {previewList.length > 5 && <span className="text-slate-600 text-xs ml-1">…{previewList.length}</span>}
+                </div>
+                <button
+                  onClick={() => setPreviewIndex(i => Math.min(previewList.length - 1, i + 1))}
+                  disabled={previewIndex === previewList.length - 1}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
             {/* Email metadata */}
-            <div className="px-6 py-3 border-b border-slate-800 space-y-2 shrink-0 bg-slate-900/60">
+            <div className="px-6 py-3 border-b border-slate-800 space-y-1.5 shrink-0 bg-slate-900/60">
               {[
                 { label: 'From',    value: fromAddress || '—' },
-                { label: 'To',      value: mode === 'manual' ? (toName ? `${toName} <${toEmail}>` : toEmail || '—') : `${validRecipients[0]?.name} <${validRecipients[0]?.email}>` },
-                { label: 'Subject', value: renderTpl(subject, previewName, previewEmail) || '—' },
+                { label: 'To',      value: currentPreview ? `${currentPreview.name} <${currentPreview.email}>` : '—' },
+                { label: 'Subject', value: previewSubject || '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex gap-3 text-sm">
                   <span className="text-slate-500 w-14 shrink-0">{label}</span>
-                  <span className="text-slate-200 font-medium truncate">{value}</span>
+                  <span className="text-slate-200 truncate">{value}</span>
                 </div>
               ))}
             </div>
 
-            {/* Rendered email body */}
-            <div className="overflow-y-auto flex-1 bg-white rounded-b-xl">
-              <div
-                className="p-6 text-sm text-slate-800 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
+            {/* Rendered body */}
+            <div className="overflow-y-auto flex-1 bg-white">
+              <div className="p-6 text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: previewHtml }} />
             </div>
 
-            {/* Modal footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-800 shrink-0 bg-slate-900/80 rounded-b-2xl">
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 shrink-0 bg-slate-900/80 rounded-b-2xl">
               <button
                 onClick={() => setShowPreviewModal(false)}
                 className="px-5 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
               >
-                Edit
+                ← Edit
               </button>
               <button
                 onClick={handleSend}
@@ -473,7 +511,9 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center gap-2"
               >
                 {sending ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <SendIcon className="w-4 h-4" />}
-                {mode === 'manual' ? 'Confirm & Send' : `Confirm & Send to ${validRecipients.length} recipient${validRecipients.length !== 1 ? 's' : ''}`}
+                {previewList.length === 1
+                  ? 'Confirm & Send'
+                  : `Send All ${previewList.length} Emails`}
               </button>
             </div>
           </div>
