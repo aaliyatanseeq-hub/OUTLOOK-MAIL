@@ -63,11 +63,10 @@ export default function RespondPage() {
       e.workPhone = 'Too long — please enter a valid phone number.'
     }
 
-    if (!pPhone) {
-      e.personalPhone = 'Personal phone number is required.'
-    } else if (digitsOnly(pPhone).length < 7) {
+    // Personal phone is optional — only validate format if provided
+    if (pPhone && digitsOnly(pPhone).length < 7) {
       e.personalPhone = 'Too short — include your country code, e.g. +971 55 123 4567'
-    } else if (digitsOnly(pPhone).length > 15) {
+    } else if (pPhone && digitsOnly(pPhone).length > 15) {
       e.personalPhone = 'Too long — please enter a valid phone number.'
     }
 
@@ -211,7 +210,7 @@ export default function RespondPage() {
             </span>
           </div>
           <h2 className="text-xl font-semibold text-white">Hi, {info?.toName?.split(' ')[0]}!</h2>
-          <p className="text-slate-400 text-sm">Please fill in your details below. All fields are required.</p>
+          <p className="text-slate-400 text-sm">Please fill in your details below. Fields marked <span className="text-rose-400">*</span> are required.</p>
         </div>
 
         {/* Read-only identity */}
@@ -237,11 +236,12 @@ export default function RespondPage() {
             error={errors.workPhone}
           />
           <Field
-            label="Personal Phone Number"
+            label="Personal Phone Number (Optional)"
             placeholder="e.g. +971 55 987 6543"
             value={personalPhone}
             onChange={setPersonalPhone}
             error={errors.personalPhone}
+            optional
           />
 
           <button
@@ -277,17 +277,21 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function Field({
-  label, placeholder, value, onChange, error,
+  label, placeholder, value, onChange, error, optional,
 }: {
   label: string
   placeholder: string
   value: string
   onChange: (v: string) => void
   error?: string
+  optional?: boolean
 }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-slate-300">{label} <span className="text-rose-400">*</span></label>
+      <label className="block text-sm font-medium text-slate-300">
+        {label} {!optional && <span className="text-rose-400">*</span>}
+        {optional && <span className="text-slate-500 text-xs font-normal ml-1">(optional)</span>}
+      </label>
       <input
         type="text"
         value={value}

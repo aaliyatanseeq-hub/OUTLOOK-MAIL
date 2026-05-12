@@ -79,11 +79,10 @@ export async function POST(
     errors.workPhone = 'Work phone number is too long. Please enter a valid number.'
   }
 
-  if (!pPhone) {
-    errors.personalPhone = 'Personal phone number is required.'
-  } else if (digitsOnly(pPhone).length < 7) {
+  // Personal phone is optional — only validate format if provided
+  if (pPhone && digitsOnly(pPhone).length < 7) {
     errors.personalPhone = 'Personal phone number is too short. Please enter a valid number.'
-  } else if (digitsOnly(pPhone).length > 15) {
+  } else if (pPhone && digitsOnly(pPhone).length > 15) {
     errors.personalPhone = 'Personal phone number is too long. Please enter a valid number.'
   }
 
