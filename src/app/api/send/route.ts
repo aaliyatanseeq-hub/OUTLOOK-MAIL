@@ -41,23 +41,40 @@ export async function POST(req: NextRequest) {
   const renderedBody    = renderTemplate(bodyTemplate, { name: toName.trim(), email: toEmail.trim(), responseLink })
 
   const signature = `
-<br/><br/>
-<table cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;font-size:13px;color:#333333;border-top:2px solid #c8a94a;padding-top:12px;margin-top:12px;">
+<br/>
+<table cellpadding="0" cellspacing="0" width="560" style="font-family:Arial,sans-serif;">
+  <!-- Main signature row -->
   <tr>
-    <td style="padding-right:20px;vertical-align:middle;border-right:1px solid #cccccc;">
-      <p style="margin:0;font-weight:bold;color:#1a1a2e;">HR Department</p>
+    <td colspan="3" style="padding-bottom:10px;border-bottom:2px solid #c8a94a;">&nbsp;</td>
+  </tr>
+  <tr>
+    <!-- Name -->
+    <td style="width:130px;vertical-align:middle;border-right:1px solid #cccccc;padding:10px 16px 10px 0;">
+      <p style="margin:0;font-weight:bold;font-size:13px;color:#1a1a2e;">HR Department</p>
     </td>
-    <td style="padding:0 20px;vertical-align:middle;border-right:1px solid #cccccc;">
-      <img src="http://tanseeqinvestment.com/wp-content/uploads/2019/07/logo-banner.png"
-           alt="Tanseeq Investment" width="120" style="display:block;" />
+    <!-- Logo -->
+    <td style="width:160px;text-align:center;vertical-align:middle;padding:10px 16px;border-right:1px solid #cccccc;">
+      <img src="http://tanseeqinvestment.com/wp-content/uploads/2019/08/tanseeq-investment_logo-tt-01.png"
+           alt="Tanseeq Investment" width="120" style="display:block;margin:0 auto;" />
     </td>
-    <td style="padding-left:20px;vertical-align:middle;font-size:12px;color:#444444;line-height:1.6;">
-      <p style="margin:0;font-weight:bold;color:#1a1a2e;">Tanseeq Investment LLC</p>
+    <!-- Company Details -->
+    <td style="padding:10px 0 10px 16px;vertical-align:middle;font-size:12px;color:#444444;line-height:1.8;">
+      <p style="margin:0;font-weight:bold;font-size:13px;color:#1a1a2e;">Tanseeq Investment LLC</p>
       <p style="margin:0;">P O Box: 3151, Dubai, UAE</p>
-      <p style="margin:0;">Tel: +971 4 2770244</p>
-      <p style="margin:0;">Mob: +971 55 3006512</p>
       <p style="margin:0;"><a href="mailto:hr-notify@tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">hr-notify@tanseeqinvestment.com</a></p>
-      <p style="margin:0;"><a href="https://www.tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">www.tanseeqinvestment.com</a></p>
+      <p style="margin:0;"><a href="http://www.tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">www.tanseeqinvestment.com</a></p>
+    </td>
+  </tr>
+  <!-- Tagline -->
+  <tr>
+    <td colspan="3" style="text-align:center;padding:8px 0;border-top:1px solid #e0c97a;border-bottom:1px solid #e0c97a;font-size:12px;color:#c8a94a;letter-spacing:2px;font-style:italic;">
+      ~&nbsp;&nbsp;In Pursuit of Excellence&nbsp;&nbsp;~
+    </td>
+  </tr>
+  <!-- 25 Years Banner -->
+  <tr>
+    <td colspan="3" style="padding-top:8px;">
+      <img src="${appUrl}/25years-banner.png" alt="Celebrating 25 Years of Excellence" width="560" style="display:block;width:100%;max-width:560px;" />
     </td>
   </tr>
 </table>`
