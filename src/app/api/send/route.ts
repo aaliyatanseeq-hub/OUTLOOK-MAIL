@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import crypto from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getEmailProvider, getEmailProviderId } from '@/lib/email/get-email-provider'
@@ -30,8 +31,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'subject and body are required' }, { status: 400 })
   }
 
+  // Generate a unique token for the response form link
+  const responseToken = crypto.randomBytes(32).toString('hex')
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000'
+  const responseLink = `${appUrl}/respond/${responseToken}`
+
   const renderedSubject = renderTemplate(subject,      { name: toName.trim(), email: toEmail.trim() })
-  const renderedBody    = renderTemplate(bodyTemplate, { name: toName.trim(), email: toEmail.trim() })
+  const renderedBody    = renderTemplate(bodyTemplate, { name: toName.trim(), email: toEmail.trim(), responseLink })
 
   // Resolve sender: DB settings → env vars
   const sender = await getSenderConfig()
@@ -56,6 +63,7 @@ export async function POST(req: NextRequest) {
       body:              renderedBody,
       provider:          providerId,
       providerMessageId: result.messageId || null,
+      responseToken,
       status:            result.success ? 'sent' : 'failed',
       sentAt:            result.success ? new Date() : null,
       failedAt:          result.success ? null : new Date(),

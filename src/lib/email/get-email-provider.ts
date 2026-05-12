@@ -1,13 +1,13 @@
 import { EmailProvider } from './provider'
-import { SmtpProvider } from './smtp-provider'
+import { MicrosoftGraphProvider } from './microsoft-graph-provider'
 
-export type EmailProviderId = 'smtp'
+export type EmailProviderId = 'microsoft-graph'
 
-/** Always returns smtp — the only active provider. */
+/** Always returns Microsoft Graph provider. */
 export async function getEmailProviderId(): Promise<EmailProviderId> {
-  return 'smtp'
+  return 'microsoft-graph'
 }
 
 export async function getEmailProvider(): Promise<EmailProvider> {
-  return new SmtpProvider()
+  return new MicrosoftGraphProvider()
 }

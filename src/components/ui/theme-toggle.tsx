@@ -6,11 +6,11 @@ import { MoonIcon, SunIcon } from 'lucide-react'
 type Theme = 'dark' | 'light'
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('dark')
+  const [theme, setTheme] = useState<Theme>('light')
 
   useEffect(() => {
     const saved = localStorage.getItem('theme') as Theme | null
-    const current = saved || 'dark'
+    const current = saved || 'light'
     document.body.dataset.theme = current
     setTheme(current)
   }, [])

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SaveIcon, LoaderIcon } from 'lucide-react'
+import { RichTextEditor } from '@/components/ui/rich-text-editor'
 
 interface Template {
   id: string
@@ -35,6 +36,10 @@ export function TemplateForm({ existing }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!form.bodyTemplate || form.bodyTemplate === '<p></p>') {
+      setError('Body is required.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -110,16 +115,17 @@ export function TemplateForm({ existing }: Props) {
         <div>
           <label className="block text-sm text-slate-300 mb-1.5">Body *</label>
           <p className="text-xs text-slate-500 mb-2">
-            Use {'{{name}}'} and {'{{email}}'} — they are replaced per recipient when sending.
+            Use <code className="bg-slate-800 px-1 rounded text-slate-300">{'{{name}}'}</code> and <code className="bg-slate-800 px-1 rounded text-slate-300">{'{{email}}'}</code> — replaced per recipient when sending.
           </p>
-          <textarea
-            className="input w-full font-mono text-sm resize-none"
-            rows={10}
-            placeholder={`Dear {{name}},\n\nThis is a message for you.\n\nBest regards,\nTanseeq Investment`}
-            required
+          <RichTextEditor
             value={form.bodyTemplate}
-            onChange={(e) => set('bodyTemplate', e.target.value)}
+            onChange={(html) => set('bodyTemplate', html)}
+            placeholder="Write your template. Use {{name}} and {{email}} as placeholders."
+            minHeight={280}
           />
+          {!form.bodyTemplate || form.bodyTemplate === '<p></p>' ? (
+            <p className="text-xs text-rose-400 mt-1">Body is required.</p>
+          ) : null}
         </div>
       </div>
 

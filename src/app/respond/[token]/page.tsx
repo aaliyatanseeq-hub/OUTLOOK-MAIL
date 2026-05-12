@@ -1,0 +1,312 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { CheckCircle2Icon, AlertTriangleIcon, LoaderIcon, SendIcon } from 'lucide-react'
+
+interface EmployeeInfo {
+  toName: string
+  toEmail: string
+  alreadySubmitted: boolean
+  submittedAt: string | null
+}
+
+interface FormErrors {
+  employeeId?: string
+  workPhone?: string
+  personalPhone?: string
+}
+
+type Stage = 'loading' | 'not-found' | 'already-submitted' | 'form' | 'confirm' | 'success'
+
+export default function RespondPage() {
+  const { token } = useParams<{ token: string }>()
+  const [stage, setStage]     = useState<Stage>('loading')
+  const [info, setInfo]       = useState<EmployeeInfo | null>(null)
+  const [employeeId, setEmployeeId]     = useState('')
+  const [workPhone, setWorkPhone]       = useState('')
+  const [personalPhone, setPersonalPhone] = useState('')
+  const [errors, setErrors]   = useState<FormErrors>({})
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/respond/${token}`)
+      .then(r => r.json())
+      .then((data) => {
+        if (data.error) { setStage('not-found'); return }
+        setInfo(data)
+        setStage(data.alreadySubmitted ? 'already-submitted' : 'form')
+      })
+      .catch(() => setStage('not-found'))
+  }, [token])
+
+  function digitsOnly(v: string) { return v.replace(/\D/g, '') }
+
+  function validate(): boolean {
+    const e: FormErrors = {}
+
+    const empId  = employeeId.trim()
+    const wPhone = workPhone.trim()
+    const pPhone = personalPhone.trim()
+
+    if (!empId) {
+      e.employeeId = 'Employee ID is required.'
+    } else if (empId.length < 3) {
+      e.employeeId = 'Employee ID must be at least 3 characters.'
+    }
+
+    if (!wPhone) {
+      e.workPhone = 'Work phone number is required.'
+    } else if (digitsOnly(wPhone).length < 7) {
+      e.workPhone = 'Too short — include your country code, e.g. +971 4 123 4567'
+    } else if (digitsOnly(wPhone).length > 15) {
+      e.workPhone = 'Too long — please enter a valid phone number.'
+    }
+
+    if (!pPhone) {
+      e.personalPhone = 'Personal phone number is required.'
+    } else if (digitsOnly(pPhone).length < 7) {
+      e.personalPhone = 'Too short — include your country code, e.g. +971 55 123 4567'
+    } else if (digitsOnly(pPhone).length > 15) {
+      e.personalPhone = 'Too long — please enter a valid phone number.'
+    }
+
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  function handleReview(e: React.FormEvent) {
+    e.preventDefault()
+    if (validate()) setStage('confirm')
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/respond/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: employeeId.trim(), workPhone: workPhone.trim(), personalPhone: personalPhone.trim() }),
+      })
+      const data = await res.json()
+      if (res.status === 409 || data.error) {
+        setStage('already-submitted')
+      } else if (data.success) {
+        setStage('success')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Loading ──────────────────────────────────────────────────────────
+  if (stage === 'loading') {
+    return (
+      <Shell>
+        <div className="flex items-center gap-3 text-slate-400">
+          <LoaderIcon className="w-5 h-5 animate-spin" />
+          Loading…
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── Not found ────────────────────────────────────────────────────────
+  if (stage === 'not-found') {
+    return (
+      <Shell>
+        <div className="text-center space-y-3">
+          <AlertTriangleIcon className="w-12 h-12 text-amber-400 mx-auto" />
+          <h2 className="text-xl font-semibold text-white">Invalid Link</h2>
+          <p className="text-slate-400 text-sm">This link is invalid or has expired. Please contact HR if you need a new link.</p>
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── Already submitted ────────────────────────────────────────────────
+  if (stage === 'already-submitted') {
+    return (
+      <Shell>
+        <div className="text-center space-y-3">
+          <CheckCircle2Icon className="w-14 h-14 text-emerald-400 mx-auto" />
+          <h2 className="text-xl font-semibold text-white">Already Submitted</h2>
+          <p className="text-slate-400 text-sm">
+            Your details have already been recorded.
+            {info?.submittedAt && (
+              <> Submitted on {new Date(info.submittedAt).toLocaleDateString()}.</>
+            )}
+          </p>
+          <p className="text-slate-500 text-xs">If you think this is a mistake, contact HR.</p>
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── Success ──────────────────────────────────────────────────────────
+  if (stage === 'success') {
+    return (
+      <Shell>
+        <div className="text-center space-y-3">
+          <CheckCircle2Icon className="w-14 h-14 text-emerald-400 mx-auto" />
+          <h2 className="text-xl font-semibold text-white">Thank You!</h2>
+          <p className="text-slate-300 text-sm">Your details have been successfully submitted.</p>
+          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 text-left text-sm space-y-2 mt-2">
+            <Row label="Employee ID"    value={employeeId} />
+            <Row label="Work Phone"     value={workPhone} />
+            <Row label="Personal Phone" value={personalPhone} />
+          </div>
+          <p className="text-slate-500 text-xs pt-2">You may close this window.</p>
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── Confirm screen ───────────────────────────────────────────────────
+  if (stage === 'confirm') {
+    return (
+      <Shell>
+        <div className="space-y-5 w-full">
+          <div className="text-center space-y-1">
+            <h2 className="text-xl font-semibold text-white">Confirm Your Details</h2>
+            <p className="text-slate-400 text-sm">Please review before submitting.</p>
+          </div>
+          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3 text-sm">
+            <Row label="Name"           value={info?.toName ?? ''} />
+            <Row label="Email"          value={info?.toEmail ?? ''} />
+            <Row label="Employee ID"    value={employeeId} />
+            <Row label="Work Phone"     value={workPhone} />
+            <Row label="Personal Phone" value={personalPhone} />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setStage('form')}
+              className="flex-1 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
+            >
+              Edit
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              {submitting ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <SendIcon className="w-4 h-4" />}
+              {submitting ? 'Submitting…' : 'Confirm & Submit'}
+            </button>
+          </div>
+        </div>
+      </Shell>
+    )
+  }
+
+  // ── Form ─────────────────────────────────────────────────────────────
+  return (
+    <Shell>
+      <div className="space-y-5 w-full">
+        {/* Header */}
+        <div className="text-center space-y-1">
+          <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-3">
+            <span className="text-indigo-300 text-xl font-bold">
+              {(info?.toName || '?')[0].toUpperCase()}
+            </span>
+          </div>
+          <h2 className="text-xl font-semibold text-white">Hi, {info?.toName?.split(' ')[0]}!</h2>
+          <p className="text-slate-400 text-sm">Please fill in your details below. All fields are required.</p>
+        </div>
+
+        {/* Read-only identity */}
+        <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl px-4 py-3 text-sm">
+          <p className="text-slate-500 text-xs mb-0.5">Submitting as</p>
+          <p className="text-slate-200 font-medium">{info?.toName} <span className="text-slate-500 font-normal">·</span> <span className="text-slate-400">{info?.toEmail}</span></p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleReview} className="space-y-4">
+          <Field
+            label="Employee ID"
+            placeholder="e.g. TQ-1045"
+            value={employeeId}
+            onChange={setEmployeeId}
+            error={errors.employeeId}
+          />
+          <Field
+            label="Work Phone Number"
+            placeholder="e.g. +971 4 123 4567"
+            value={workPhone}
+            onChange={setWorkPhone}
+            error={errors.workPhone}
+          />
+          <Field
+            label="Personal Phone Number"
+            placeholder="e.g. +971 55 987 6543"
+            value={personalPhone}
+            onChange={setPersonalPhone}
+            error={errors.personalPhone}
+          />
+
+          <button
+            type="submit"
+            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2 mt-2"
+          >
+            Review & Submit →
+          </button>
+        </form>
+
+        <p className="text-center text-xs text-slate-600">
+          This form is intended only for {info?.toEmail}. Do not share this link.
+        </p>
+      </div>
+    </Shell>
+  )
+}
+
+// ── Reusable sub-components ───────────────────────────────────────────
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-2 h-2 rounded-full bg-indigo-500" />
+          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase">HR Records Update</span>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Field({
+  label, placeholder, value, onChange, error,
+}: {
+  label: string
+  placeholder: string
+  value: string
+  onChange: (v: string) => void
+  error?: string
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-slate-300">{label} <span className="text-rose-400">*</span></label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full px-4 py-2.5 rounded-xl bg-slate-800 border text-slate-100 placeholder-slate-600 text-sm focus:outline-none focus:border-indigo-500 transition-colors ${
+          error ? 'border-rose-500' : 'border-slate-700'
+        }`}
+      />
+      {error && <p className="text-xs text-rose-400">{error}</p>}
+    </div>
+  )
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="text-slate-500 shrink-0">{label}</span>
+      <span className="text-slate-200 text-right font-medium">{value}</span>
+    </div>
+  )
+}

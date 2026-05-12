@@ -2,58 +2,40 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { fetchRepliesFromRecipients } from '@/lib/gmail-reader'
-import { getGoogleInboxEmail } from '@/lib/google-oauth'
-
-function getSyncErrorMeta(err: unknown): {
-  message: string
-  providerError: string
-  providerDescription: string
-  status?: number
-  code?: number | string
-} {
-  const e = err as {
-    message?: string
-    code?: number | string
-    status?: number
-    response?: { data?: { error?: string; error_description?: string }; status?: number }
-  }
-
-  return {
-    message: e?.message ?? 'Sync failed',
-    providerError: e?.response?.data?.error ?? '',
-    providerDescription: e?.response?.data?.error_description ?? '',
-    status: e?.response?.status ?? e?.status,
-    code: e?.code,
-  }
-}
+import { fetchOutlookReplies } from '@/lib/outlook-reader'
+import { getAzureMailbox, isAzureConfigured } from '@/lib/microsoft-graph'
+import { parseEmployeeReply } from '@/lib/reply-parser'
 
 function formatSyncError(err: unknown): string {
-  const meta = getSyncErrorMeta(err)
-  const providerError = meta.providerError
-  const providerDescription = meta.providerDescription
-  const baseMessage = meta.message
+  const e = err as { message?: string }
+  const msg = e?.message ?? 'Sync failed'
 
-  if (providerError === 'invalid_grant' || baseMessage === 'invalid_grant') {
-    return [
-      'Google inbox authorization expired or was revoked.',
-      'Reconnect Gmail from Settings -> Gmail Inbox OAuth,',
-      'or update GOOGLE_REFRESH_TOKEN and redeploy.',
-    ].join(' ')
+  if (msg.includes('401') || msg.includes('InvalidAuthenticationToken')) {
+    return 'Azure authentication failed. Check AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET.'
   }
-
-  return providerDescription || baseMessage
+  if (msg.includes('403') || msg.includes('Forbidden')) {
+    return 'Graph API access denied. Ensure Mail.Read permission is granted with admin consent in Azure Portal.'
+  }
+  if (msg.includes('mailbox') || msg.includes('AZURE_INBOX_EMAIL')) {
+    return 'No mailbox configured. Set AZURE_INBOX_EMAIL or MAIL_FROM_ADDRESS in env.'
+  }
+  return msg
 }
 
 // POST /api/inbox/sync
-// Only fetches Gmail messages FROM people we have previously emailed, not the whole inbox.
+// Fetches Outlook inbox messages FROM people we have previously emailed.
 export async function POST() {
   try {
-    const myEmail = await getGoogleInboxEmail()
+    if (!isAzureConfigured()) {
+      return NextResponse.json(
+        { error: 'Azure credentials not configured. Set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET.' },
+        { status: 503 },
+      )
+    }
 
-    // Full allow-list: everyone we have successfully emailed (for cleanup + UI consistency).
-    // Gmail search supports limited from:(a OR b ...) length, so we query the 50
-    // most recently interacted recipients rather than arbitrary DB order.
+    const myEmail = getAzureMailbox().toLowerCase().trim()
+
+    // Full allow-list: everyone we have successfully emailed.
     const allRecipients = await prisma.sentEmail.findMany({
       where: { status: { not: 'failed' } },
       select: { toEmail: true },
@@ -73,7 +55,7 @@ export async function POST() {
       })
     }
 
-    // 50 addresses we most recently emailed (based on max sent row per recipient).
+    // 50 most recently emailed unique recipients for the Graph query.
     const grouped = await prisma.sentEmail.groupBy({
       by: ['toEmail'],
       where: { status: { not: 'failed' } },
@@ -90,34 +72,29 @@ export async function POST() {
       .slice(0, 50)
       .map((g) => g.email)
 
-    // Remove previously stored inbound messages from non-history contacts.
+    // Remove previously stored messages from non-history contacts.
     const { count: cleaned } = await prisma.inboundEmail.deleteMany({
       where: {
         fromEmail: { notIn: allowList, mode: 'insensitive' },
       },
     })
 
-    const { messages, listTotal, queryUsed } = await fetchRepliesFromRecipients(
-      queryRecipients,
-      myEmail,
-      100,
-    )
+    const { messages, totalFetched } = await fetchOutlookReplies(queryRecipients, 100)
 
     let created = 0
     let skipped = 0
 
     for (const msg of messages) {
+      // Deduplicate by Outlook message ID
       const existing = await prisma.inboundEmail.findUnique({
-        where: { gmailId: msg.gmailId },
+        where: { messageId: msg.messageId },
       })
       if (existing) {
         skipped++
         continue
       }
 
-      // Link to the most recent outbound SentEmail sent TO this person,
-      // BUT only if the message has an In-Reply-To header (genuine reply).
-      // Fresh messages from the same contact are stored as standalone (sentEmailId: null).
+      // Link to most recent outbound SentEmail only for genuine replies (has In-Reply-To header).
       let matchId: string | null = null
       if (msg.inReplyTo) {
         const match = await prisma.sentEmail.findFirst({
@@ -127,10 +104,10 @@ export async function POST() {
         matchId = match?.id ?? null
       }
 
-      await prisma.inboundEmail.create({
+      const inbound = await prisma.inboundEmail.create({
         data: {
-          gmailId: msg.gmailId,
-          threadId: msg.threadId,
+          messageId: msg.messageId,
+          threadId: msg.conversationId,
           fromName: msg.fromName,
           fromEmail: msg.fromEmail,
           toEmail: msg.toEmail,
@@ -142,6 +119,32 @@ export async function POST() {
           sentEmailId: matchId,
         },
       })
+
+      // Try to parse as structured employee response (if body contains the template fields)
+      const rawText = msg.bodyText || msg.snippet || ''
+      if (rawText && /EMPLOYEE\s*ID|WORK\s*PHONE|PERSONAL\s*(PHONE|NUMBER|MOBILE)/i.test(rawText)) {
+        // Only create one response per employee email
+        const alreadyParsed = await prisma.employeeResponse.findFirst({
+          where: { fromEmail: { equals: msg.fromEmail, mode: 'insensitive' } },
+        })
+        if (!alreadyParsed) {
+          const parsed = parseEmployeeReply(rawText)
+          await prisma.employeeResponse.create({
+            data: {
+              inboundEmailId: inbound.id,
+              fromEmail: msg.fromEmail,
+              fromName: msg.fromName,
+              employeeId: parsed.employeeId,
+              workPhone: parsed.workPhone,
+              personalPhone: parsed.personalPhone,
+              rawText,
+              parsedOk: parsed.parsedOk,
+              receivedAt: msg.receivedAt,
+            },
+          })
+        }
+      }
+
       created++
     }
 
@@ -152,20 +155,11 @@ export async function POST() {
       cleaned,
       checkedRecipients: queryRecipients.length,
       allowListSize: allowList.length,
-      gmailListTotal: listTotal,
-      gmailQueryUsed: queryUsed,
-      mailboxHint: myEmail ? `${myEmail.slice(0, 3)}...@${myEmail.split('@')[1] ?? '?'}` : 'missing',
-      queryRecipientsSample: queryRecipients.slice(0, 8),
+      outlookTotal: totalFetched,
+      mailboxHint: myEmail ? `${myEmail.slice(0, 4)}...@${myEmail.split('@')[1] ?? '?'}` : 'missing',
     })
   } catch (err: unknown) {
-    const meta = getSyncErrorMeta(err)
-    console.error('[inbox/sync]', {
-      message: meta.message,
-      providerError: meta.providerError,
-      providerDescription: meta.providerDescription,
-      status: meta.status,
-      code: meta.code,
-    })
+    console.error('[inbox/sync]', err)
     return NextResponse.json(
       { error: formatSyncError(err) },
       { status: 500 },

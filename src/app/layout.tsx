@@ -13,20 +13,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-slate-950 text-slate-100 antialiased" data-theme="dark">
+      <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var stored = localStorage.getItem('theme');
-                  var theme = stored === 'light' ? 'light' : 'dark';
-                  document.body.dataset.theme = theme;
-                } catch (e) {}
-              })();
-            `,
+            __html: `(function(){var t=localStorage.getItem('theme');if(!t||t==='dark'){localStorage.setItem('theme','light');document.documentElement.dataset.theme='light';}})();`,
           }}
         />
+      </head>
+      <body className="bg-slate-100 text-slate-900 antialiased" data-theme="light">
         {children}
       </body>
     </html>

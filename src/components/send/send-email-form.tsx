@@ -111,7 +111,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
   }
 
   // ── Send ──────────────────────────────────────────────────────
-  async function sendOne(name: string, email: string): Promise<SendResult> {
+  async function sendOne(name: string, email: string, attempt = 1): Promise<SendResult> {
     try {
       const res = await fetch('/api/send', {
         method: 'POST',
@@ -123,6 +123,12 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
           customBody: body,
         }),
       })
+      // Retry once on 429 (Graph API rate limit) after a short back-off
+      if (res.status === 429 && attempt < 3) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '5', 10)
+        await new Promise(r => setTimeout(r, retryAfter * 1000))
+        return sendOne(name, email, attempt + 1)
+      }
       const json = await res.json()
       return { name, email, success: json.success, error: json.error }
     } catch (err) {
@@ -148,6 +154,8 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
         const r = await sendOne(valid[i].name, valid[i].email)
         res.push(r)
         setProgress({ done: i + 1, total: valid.length })
+        // Throttle: ~3 emails/sec to stay well within Graph API limits
+        if (i < valid.length - 1) await new Promise(resolve => setTimeout(resolve, 350))
       }
       setResults(res)
       setProgress(null)
@@ -331,10 +339,14 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
             >
               {sending
                 ? <><LoaderIcon className="w-4 h-4 animate-spin" />
-                    {progress ? `Sending ${progress.done}/${progress.total}…` : 'Sending…'}
+                    {progress
+                      ? `Sending ${progress.done}/${progress.total}… (~${Math.ceil((progress.total - progress.done) * 0.35)}s left)`
+                      : 'Sending…'}
                   </>
                 : <><SendIcon className="w-4 h-4" />
-                    {mode === 'manual' ? 'Send' : `Send to ${validRecipients.length} recipient${validRecipients.length !== 1 ? 's' : ''}`}
+                    {mode === 'manual'
+                      ? 'Send'
+                      : `Send to ${validRecipients.length} recipient${validRecipients.length !== 1 ? 's' : ''}${validRecipients.length > 10 ? ` (~${Math.ceil(validRecipients.length * 0.35)}s)` : ''}`}
                   </>
               }
             </button>
@@ -347,7 +359,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
               </button>
             )}
           </div>
-          <p className="text-xs text-slate-600">via Google SMTP</p>
+          <p className="text-xs text-slate-600">via Microsoft Graph</p>
         </div>
       </form>
 

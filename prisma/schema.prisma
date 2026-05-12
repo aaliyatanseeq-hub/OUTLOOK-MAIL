@@ -39,6 +39,8 @@ model SentEmail {
   body              String    @db.Text
   provider          String    @default("smtp")
   providerMessageId String?
+  responseToken     String?   @unique           // unique token for the response form link
+  respondedAt       DateTime?                   // when the employee submitted the form
   replies           InboundEmail[]
   status            String    @default("sent") // sent | failed | delivered | opened | clicked | bounced
   sentAt            DateTime?
@@ -56,11 +58,11 @@ model SentEmail {
   @@index([createdAt])
 }
 
-// Inbound emails received in Gmail inbox (replies/new messages)
+// Inbound emails received in Outlook inbox (replies/new messages)
 model InboundEmail {
   id          String    @id @default(cuid())
-  gmailId     String    @unique           // Gmail message ID (deduplication)
-  threadId    String?                     // Gmail thread ID
+  messageId   String    @unique           // Outlook/provider message ID (deduplication)
+  threadId    String?                     // Conversation/thread ID
   sentEmailId String?                     // linked outbound email if matched
   sentEmail   SentEmail? @relation(fields: [sentEmailId], references: [id], onDelete: SetNull)
   fromName    String
@@ -69,15 +71,36 @@ model InboundEmail {
   subject     String
   bodyText    String?   @db.Text
   bodyHtml    String?   @db.Text
-  snippet     String?                     // Gmail short preview
+  snippet     String?                     // Short preview of the message body
   isRead      Boolean   @default(false)
   receivedAt  DateTime
   createdAt   DateTime  @default(now())
+  response    EmployeeResponse?
 
   @@index([fromEmail])
   @@index([isRead])
   @@index([receivedAt])
   @@index([sentEmailId])
+}
+
+// Parsed employee data from structured reply emails
+model EmployeeResponse {
+  id             String       @id @default(cuid())
+  inboundEmailId String?      @unique           // linked inbound email
+  inboundEmail   InboundEmail? @relation(fields: [inboundEmailId], references: [id], onDelete: SetNull)
+  fromEmail      String                         // employee email
+  fromName       String                         // employee name
+  employeeId     String?                        // parsed: EMPLOYEE ID
+  workPhone      String?                        // parsed: WORK PHONE
+  personalPhone  String?                        // parsed: PERSONAL PHONE
+  rawText        String?      @db.Text          // original reply text (for manual review)
+  parsedOk       Boolean      @default(false)   // true if all fields extracted cleanly
+  receivedAt     DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([fromEmail])
+  @@index([parsedOk])
+  @@index([receivedAt])
 }
 
 // Simple key-value store for runtime app settings (e.g. active email provider)

@@ -31,7 +31,7 @@ interface SentEmailRef {
 
 interface InboundEmail {
   id: string
-  gmailId: string
+  messageId: string
   threadId: string | null
   sentEmailId: string | null
   fromName: string
@@ -288,7 +288,7 @@ export default function InboxClient() {
               <p className="text-sm font-medium text-slate-400">No replies yet</p>
               <p className="text-xs text-slate-600 text-center px-4">When someone replies to an email you sent, it will appear here.</p>
               <button onClick={handleSync} className="text-xs text-violet-400 hover:text-violet-300 mt-1">
-                Sync replies from Gmail →
+                Sync Outlook replies →
               </button>
             </div>
           ) : (

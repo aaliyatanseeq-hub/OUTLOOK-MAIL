@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 
 /**
  * Resolves the "From" display name and email address.
- * Priority: DB (saved via Settings UI) → MAIL_FROM env → SMTP_USER env
+ * Priority: DB (saved via Settings UI) → MAIL_FROM_ADDRESS/MAIL_FROM_NAME env vars
  */
 export async function getSenderConfig(): Promise<{ name: string; email: string }> {
   const [nameRow, emailRow] = await Promise.all([
@@ -17,21 +17,19 @@ export async function getSenderConfig(): Promise<{ name: string; email: string }
     }
   }
 
-  // Fallback: parse MAIL_FROM="Display Name <email@example.com>"
-  const envFrom  = process.env.MAIL_FROM?.trim() ?? ''
-  const envMatch = envFrom.match(/^(.*?)\s*<([^>]+)>$/)
-  if (envMatch) {
-    return { name: envMatch[1].trim(), email: envMatch[2].trim() }
+  // Fallback: MAIL_FROM_ADDRESS + MAIL_FROM_NAME env vars
+  const envAddress = process.env.MAIL_FROM_ADDRESS?.trim() ?? ''
+  const envName    = process.env.MAIL_FROM_NAME?.trim() ?? ''
+  if (envAddress) {
+    return { name: envName, email: envAddress }
   }
 
-  // Last resort: bare SMTP_USER
-  const smtpUser = process.env.SMTP_USER?.trim() ?? ''
-  return { name: '', email: smtpUser }
+  return { name: '', email: '' }
 }
 
 /**
  * Builds the formatted "From" string for the email provider.
- * e.g. "Aaliya <afraaaliya471@gmail.com>"
+ * e.g. "Aaliya <aaliya@yourdomain.com>"
  */
 export function formatFrom(name: string, email: string): string {
   return name ? `${name} <${email}>` : email

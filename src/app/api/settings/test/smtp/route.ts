@@ -1,58 +1,47 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import nodemailer from 'nodemailer'
+import { getGraphAccessToken, isAzureConfigured, getAzureMailbox } from '@/lib/microsoft-graph'
 
+// Tests Azure credentials by fetching an access token from Microsoft.
 export async function GET() {
-  const host = process.env.SMTP_HOST?.trim()
-  const port = process.env.SMTP_PORT?.trim()
-  const user = process.env.SMTP_USER?.trim()
-  const pass = process.env.SMTP_PASS?.trim()
-  const mailFrom = process.env.MAIL_FROM?.trim()
-
   const missing: string[] = []
-  if (!host) missing.push('SMTP_HOST')
-  if (!port) missing.push('SMTP_PORT')
-  if (!user) missing.push('SMTP_USER')
-  if (!pass) missing.push('SMTP_PASS')
+  if (!process.env.AZURE_TENANT_ID?.trim()) missing.push('AZURE_TENANT_ID')
+  if (!process.env.AZURE_CLIENT_ID?.trim()) missing.push('AZURE_CLIENT_ID')
+  if (!process.env.AZURE_CLIENT_SECRET?.trim()) missing.push('AZURE_CLIENT_SECRET')
 
   if (missing.length > 0) {
     return NextResponse.json({
       ok: false,
-      error: `Missing: ${missing.join(', ')} — add these to .env.local`,
+      error: `Missing: ${missing.join(', ')} — add these to your environment variables.`,
+    })
+  }
+
+  const mailbox = getAzureMailbox()
+  if (!mailbox) {
+    return NextResponse.json({
+      ok: false,
+      error: 'Missing AZURE_INBOX_EMAIL or MAIL_FROM_ADDRESS — set the mailbox address.',
     })
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host,
-      port: Number(port),
-      secure: Number(port) === 465,
-      auth: { user, pass },
-      tls: { rejectUnauthorized: false },
-    })
-
-    // verify() checks the connection and auth — does NOT send any email
-    await transporter.verify()
+    // This will throw if credentials are wrong
+    await getGraphAccessToken()
 
     return NextResponse.json({
       ok: true,
-      host,
-      port,
-      user,
-      mailFrom: mailFrom || user,
-      hint: 'SMTP connection verified. Ready to send emails.',
+      hint: 'Azure credentials verified. Microsoft Graph API is ready.',
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
-    const hint =
-      msg.includes('Invalid login') || msg.includes('Username and Password')
-        ? 'Login failed. For Gmail: use an App Password (not your regular password). Go to myaccount.google.com → Security → 2-Step Verification → App passwords.'
-        : msg.includes('ECONNREFUSED') || msg.includes('connect')
-          ? `Cannot connect to ${host}:${port}. Check SMTP_HOST and SMTP_PORT.`
-          : msg.includes('self signed') || msg.includes('certificate')
-            ? 'TLS certificate issue. Try setting SMTP_PORT=587 for Gmail.'
-            : undefined
+    const hint = msg.includes('401') || msg.includes('invalid_client')
+      ? 'Invalid client credentials. Check AZURE_CLIENT_ID and AZURE_CLIENT_SECRET.'
+      : msg.includes('tenant')
+        ? 'Invalid tenant. Check AZURE_TENANT_ID.'
+        : msg.includes('403') || msg.includes('Forbidden')
+          ? 'Access denied. Ensure Mail.Send and Mail.Read permissions have admin consent in Azure Portal.'
+          : undefined
 
     return NextResponse.json({ ok: false, error: msg, hint })
   }
