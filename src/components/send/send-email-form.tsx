@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   SendIcon, LoaderIcon, CheckCircle2Icon, XCircleIcon,
-  EyeIcon, EyeOffIcon, UploadIcon, UserIcon, FileTextIcon,
-  FileSpreadsheetIcon, Trash2Icon, AlertCircleIcon,
+  EyeIcon, UploadIcon, UserIcon, FileTextIcon,
+  FileSpreadsheetIcon, Trash2Icon, AlertCircleIcon, XIcon,
 } from 'lucide-react'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import Papa from 'papaparse'
@@ -51,7 +51,6 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
   const [selectedTemplateId, setSelectedTemplateId] = useState(defaultTemplateId || '')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
 
   // Manual
   const [toName, setToName] = useState('')
@@ -64,6 +63,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
 
   // Sending state
   const [sending, setSending] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [results, setResults] = useState<SendResult[]>([])
   const [singleResult, setSingleResult] = useState<{ success: boolean; error?: string } | null>(null)
@@ -136,8 +136,13 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
     }
   }
 
-  async function handleSend(e: React.FormEvent) {
+  function handleReviewClick(e: React.FormEvent) {
     e.preventDefault()
+    setShowPreviewModal(true)
+  }
+
+  async function handleSend() {
+    setShowPreviewModal(false)
     setSending(true)
     setResults([])
     setSingleResult(null)
@@ -165,7 +170,9 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
 
   const validRecipients = recipients.filter((r) => !r.error)
   const invalidRecipients = recipients.filter((r) => r.error)
-  const previewBody = renderTpl(body.replace(/<[^>]*>/g, '\n').replace(/\n{3,}/g, '\n\n').trim(), toName, toEmail)
+  const previewName  = mode === 'manual' ? toName  : (validRecipients[0]?.name  || 'Employee')
+  const previewEmail = mode === 'manual' ? toEmail : (validRecipients[0]?.email || 'employee@example.com')
+  const previewHtml  = renderTpl(body, previewName, previewEmail)
 
   const successCount = results.filter((r) => r.success).length
   const failCount = results.filter((r) => !r.success).length
@@ -207,7 +214,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
         ))}
       </div>
 
-      <form onSubmit={handleSend} className="card !p-0 overflow-hidden !backdrop-blur-none">
+      <form onSubmit={handleReviewClick} className="card !p-0 overflow-hidden !backdrop-blur-none">
 
         {/* ── Recipient area ── */}
         {mode === 'manual' ? (
@@ -335,7 +342,7 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
             <button
               type="submit"
               disabled={sending || (mode !== 'manual' && validRecipients.length === 0)}
-              className="button-primary disabled:opacity-50 px-5"
+              className="button-primary disabled:opacity-50 px-5 gap-2"
             >
               {sending
                 ? <><LoaderIcon className="w-4 h-4 animate-spin" />
@@ -343,21 +350,13 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
                       ? `Sending ${progress.done}/${progress.total}… (~${Math.ceil((progress.total - progress.done) * 0.35)}s left)`
                       : 'Sending…'}
                   </>
-                : <><SendIcon className="w-4 h-4" />
+                : <><EyeIcon className="w-4 h-4" />
                     {mode === 'manual'
-                      ? 'Send'
-                      : `Send to ${validRecipients.length} recipient${validRecipients.length !== 1 ? 's' : ''}${validRecipients.length > 10 ? ` (~${Math.ceil(validRecipients.length * 0.35)}s)` : ''}`}
+                      ? 'Preview & Send'
+                      : `Preview & Send to ${validRecipients.length} recipient${validRecipients.length !== 1 ? 's' : ''}`}
                   </>
               }
             </button>
-
-            {mode === 'manual' && (
-              <button type="button" onClick={() => setShowPreview((p) => !p)}
-                className="button-secondary gap-1.5 px-3 py-2">
-                {showPreview ? <EyeOffIcon className="w-3.5 h-3.5" /> : <EyeIcon className="w-3.5 h-3.5" />}
-                <span className="text-xs">Preview</span>
-              </button>
-            )}
           </div>
           <p className="text-xs text-slate-600">via Microsoft Graph</p>
         </div>
@@ -419,29 +418,64 @@ export function SendEmailForm({ templates, defaultTemplateId, fromAddress }: { t
         </div>
       )}
 
-      {/* ── Manual preview ── */}
-      {showPreview && mode === 'manual' && (subject || body) && (
-        <div className="card !p-0 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Preview</p>
-            <button type="button" onClick={() => setShowPreview(false)} className="text-slate-600 hover:text-slate-400 text-xs">Close</button>
-          </div>
-          <div className="px-5 py-3 border-b border-slate-800 space-y-1.5">
-            <div className="flex gap-2 text-sm">
-              <span className="text-slate-500 w-16">From</span>
-              <span className="text-slate-400">{fromAddress || '—'}</span>
+      {/* ── Preview Modal ── */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
+              <div>
+                <p className="text-sm font-semibold text-white">Email Preview</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {mode === 'manual'
+                    ? 'This is exactly what the recipient will receive.'
+                    : `Showing preview for first recipient. Will send to ${validRecipients.length} people.`}
+                </p>
+              </div>
+              <button onClick={() => setShowPreviewModal(false)} className="text-slate-500 hover:text-white transition-colors">
+                <XIcon className="w-5 h-5" />
+              </button>
             </div>
-            <div className="flex gap-2 text-sm">
-              <span className="text-slate-500 w-16">To</span>
-              <span className="text-slate-200">{toName ? `${toName} <${toEmail}>` : toEmail || '—'}</span>
+
+            {/* Email metadata */}
+            <div className="px-6 py-3 border-b border-slate-800 space-y-2 shrink-0 bg-slate-900/60">
+              {[
+                { label: 'From',    value: fromAddress || '—' },
+                { label: 'To',      value: mode === 'manual' ? (toName ? `${toName} <${toEmail}>` : toEmail || '—') : `${validRecipients[0]?.name} <${validRecipients[0]?.email}>` },
+                { label: 'Subject', value: renderTpl(subject, previewName, previewEmail) || '—' },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex gap-3 text-sm">
+                  <span className="text-slate-500 w-14 shrink-0">{label}</span>
+                  <span className="text-slate-200 font-medium truncate">{value}</span>
+                </div>
+              ))}
             </div>
-            <div className="flex gap-2 text-sm">
-              <span className="text-slate-500 w-16">Subject</span>
-              <span className="text-slate-200 font-medium">{renderTpl(subject, toName, toEmail) || '—'}</span>
+
+            {/* Rendered email body */}
+            <div className="overflow-y-auto flex-1 bg-white rounded-b-xl">
+              <div
+                className="p-6 text-sm text-slate-800 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
             </div>
-          </div>
-          <div className="px-5 py-5">
-            <pre className="text-sm text-slate-300 whitespace-pre-wrap font-sans leading-relaxed">{previewBody}</pre>
+
+            {/* Modal footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-800 shrink-0 bg-slate-900/80 rounded-b-2xl">
+              <button
+                onClick={() => setShowPreviewModal(false)}
+                className="px-5 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleSend}
+                disabled={sending}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center gap-2"
+              >
+                {sending ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <SendIcon className="w-4 h-4" />}
+                {mode === 'manual' ? 'Confirm & Send' : `Confirm & Send to ${validRecipients.length} recipient${validRecipients.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
           </div>
         </div>
       )}
