@@ -70,22 +70,38 @@ export async function POST(
     errors.employeeId = 'Employee ID must not exceed 6 characters.'
   }
 
-  // Phone validation: strip non-digits, must be 7–15 digits
   const digitsOnly = (v: string) => v.replace(/\D/g, '')
+
+  // Validate digit count based on country code prefix in the stored value
+  function validatePhone(phone: string): string | null {
+    const d = digitsOnly(phone)
+    if (phone.startsWith('+971')) {
+      // UAE: 8–9 digits after code
+      const local = d.replace(/^971/, '')
+      if (local.length < 8) return 'UAE numbers must be at least 8 digits.'
+      if (local.length > 9) return 'UAE numbers must not exceed 9 digits.'
+    } else if (phone.startsWith('+966')) {
+      // KSA: 8–9 digits after code
+      const local = d.replace(/^966/, '')
+      if (local.length < 8) return 'KSA numbers must be at least 8 digits.'
+      if (local.length > 9) return 'KSA numbers must not exceed 9 digits.'
+    } else {
+      if (d.length < 7)  return 'Please enter a valid phone number.'
+      if (d.length > 15) return 'Phone number is too long.'
+    }
+    return null
+  }
 
   if (!wPhone) {
     errors.workPhone = 'Work phone number is required.'
-  } else if (digitsOnly(wPhone).length < 7) {
-    errors.workPhone = 'Please enter a valid work phone number.'
-  } else if (digitsOnly(wPhone).length > 15) {
-    errors.workPhone = 'Phone number is too long.'
+  } else {
+    const err = validatePhone(wPhone)
+    if (err) errors.workPhone = err
   }
 
-  // Personal phone is optional — only validate if provided
-  if (pPhone && digitsOnly(pPhone).length < 7) {
-    errors.personalPhone = 'Please enter a valid personal phone number.'
-  } else if (pPhone && digitsOnly(pPhone).length > 15) {
-    errors.personalPhone = 'Phone number is too long.'
+  if (pPhone) {
+    const err = validatePhone(pPhone)
+    if (err) errors.personalPhone = err
   }
 
   if (Object.keys(errors).length > 0) {

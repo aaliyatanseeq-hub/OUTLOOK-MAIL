@@ -57,6 +57,24 @@ export default function RespondPage() {
 
   function digitsOnly(v: string) { return v.replace(/\D/g, '') }
 
+  function phoneError(code: string, number: string, label: string): string | undefined {
+    const d = digitsOnly(number)
+    if (!number.trim()) return `${label} is required.`
+    if (code === '+971') {
+      // UAE: 8 digits (landline e.g. 41234567) or 9 digits (mobile e.g. 501234567)
+      if (d.length < 8) return 'UAE numbers must be at least 8 digits.'
+      if (d.length > 9) return 'UAE numbers must not exceed 9 digits.'
+    } else if (code === '+966') {
+      // KSA: 9 digits (mobile e.g. 501234567)
+      if (d.length < 8) return 'KSA numbers must be at least 8 digits.'
+      if (d.length > 9) return 'KSA numbers must not exceed 9 digits.'
+    } else {
+      if (d.length < 7)  return 'Please enter a valid phone number.'
+      if (d.length > 12) return 'Phone number is too long.'
+    }
+    return undefined
+  }
+
   function validate(): boolean {
     const e: FormErrors = {}
     const empId = employeeId.trim()
@@ -71,21 +89,17 @@ export default function RespondPage() {
 
     if (workCode === 'other' && !workCustomCode.trim()) {
       e.workPhone = 'Please enter your country code.'
-    } else if (!workNumber.trim()) {
-      e.workPhone = 'Work phone number is required.'
-    } else if (digitsOnly(workNumber).length < 7) {
-      e.workPhone = 'Please enter a valid work phone number.'
-    } else if (digitsOnly(workNumber).length > 12) {
-      e.workPhone = 'Phone number is too long.'
+    } else {
+      const err = phoneError(workCode === 'other' ? workCustomCode : workCode, workNumber, 'Work phone number')
+      if (err) e.workPhone = err
     }
 
     if (personalNumber.trim()) {
       if (personalCode === 'other' && !personalCustomCode.trim()) {
         e.personalPhone = 'Please enter your country code.'
-      } else if (digitsOnly(personalNumber).length < 7) {
-        e.personalPhone = 'Please enter a valid personal phone number.'
-      } else if (digitsOnly(personalNumber).length > 12) {
-        e.personalPhone = 'Phone number is too long.'
+      } else {
+        const err = phoneError(personalCode === 'other' ? personalCustomCode : personalCode, personalNumber, 'Personal phone number')
+        if (err && err !== 'Personal phone number is required.') e.personalPhone = err
       }
     }
 
