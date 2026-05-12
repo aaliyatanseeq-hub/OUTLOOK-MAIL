@@ -19,11 +19,6 @@ interface FormErrors {
 
 type Stage = 'loading' | 'not-found' | 'already-submitted' | 'form' | 'confirm' | 'success'
 
-const COUNTRY_CODES = [
-  { label: 'UAE (+971)', value: '+971' },
-  { label: 'KSA (+966)', value: '+966' },
-  { label: 'Other',      value: 'other' },
-]
 
 export default function RespondPage() {
   const { token } = useParams<{ token: string }>()
@@ -324,15 +319,17 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
-        {/* Header with logo */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+        {/* Header: logo + department label */}
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-800">
           <img
-            src="http://tanseeqinvestment.com/wp-content/uploads/2019/08/tanseeq-investment_logo-tt-01.png"
+            src="/tanseeq-logo.png"
             alt="Tanseeq Investment"
-            className="h-10 w-auto object-contain"
-            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+            className="h-8 w-auto object-contain"
           />
-          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase text-right">HR Department</span>
+          <div>
+            <p className="text-xs font-semibold text-slate-300 tracking-wide">Tanseeq Investment LLC</p>
+            <p className="text-xs text-slate-500">HR Department</p>
+          </div>
         </div>
         {children}
       </div>
@@ -361,39 +358,41 @@ function PhoneField({
           ? <span className="text-rose-400 ml-1">*</span>
           : <span className="text-slate-500 text-xs font-normal ml-2">(optional)</span>}
       </label>
-      <div className={`rounded-xl border transition-colors ${error ? 'border-rose-500' : 'border-slate-700 focus-within:border-indigo-500'}`}>
-        {/* Country code row */}
-        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-          <span className="text-xs text-slate-500 shrink-0">Country</span>
+      <div className={`flex rounded-xl border overflow-hidden transition-colors ${error ? 'border-rose-500' : 'border-slate-700 focus-within:border-indigo-500'}`}>
+        {/* Country code selector — compact, styled */}
+        <div className="relative shrink-0">
           <select
             value={code}
             onChange={e => onCodeChange(e.target.value)}
-            className="bg-transparent text-slate-300 text-xs outline-none cursor-pointer"
+            className="h-full appearance-none bg-slate-800 text-slate-200 text-sm pl-3 pr-7 outline-none cursor-pointer border-r border-slate-700 min-w-[96px]"
           >
-            {COUNTRY_CODES.map(c => (
-              <option key={c.value} value={c.value} className="bg-slate-800">{c.label}</option>
-            ))}
+            <option value="+971">🇦🇪 +971</option>
+            <option value="+966">🇸🇦 +966</option>
+            <option value="other">Other</option>
           </select>
-          {code === 'other' && (
-            <input
-              type="text"
-              value={customCode}
-              onChange={e => onCustomCodeChange('+' + e.target.value.replace(/[^\d]/g, ''))}
-              placeholder="+XXX"
-              maxLength={5}
-              className="w-14 bg-transparent text-slate-200 text-xs outline-none border-b border-slate-600 pb-0.5 text-center"
-            />
-          )}
+          {/* chevron */}
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">▾</span>
         </div>
-        {/* Number input */}
-        <div className="border-t border-slate-800">
+
+        {/* Custom code input — only when "Other" is selected */}
+        {code === 'other' && (
           <input
-            type="tel"
-            value={number}
-            onChange={e => onNumberChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
-            className="w-full bg-transparent text-slate-100 text-sm px-3 py-2.5 outline-none"
+            type="text"
+            value={customCode}
+            onChange={e => onCustomCodeChange('+' + e.target.value.replace(/[^\d]/g, ''))}
+            placeholder="+XXX"
+            maxLength={5}
+            className="w-16 bg-slate-800 text-slate-100 text-sm px-2 py-2.5 outline-none border-r border-slate-700 text-center"
           />
-        </div>
+        )}
+
+        {/* Phone number input */}
+        <input
+          type="tel"
+          value={number}
+          onChange={e => onNumberChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
+          className="flex-1 bg-slate-800 text-slate-100 text-sm px-3 py-2.5 outline-none min-w-0"
+        />
       </div>
       {error && <p className="text-xs text-rose-400">{error}</p>}
     </div>
