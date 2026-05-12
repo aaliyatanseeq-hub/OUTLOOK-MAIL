@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
 
 import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getEmailProvider, getEmailProviderId } from '@/lib/email/get-email-provider'
@@ -36,6 +38,13 @@ export async function POST(req: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000'
   const responseLink = `${appUrl}/respond/${responseToken}`
+
+  // Embed banner as base64 so email clients show it without needing to "load images"
+  let bannerBase64 = ''
+  try {
+    const bannerPath = path.join(process.cwd(), 'public', '25years-banner.png')
+    bannerBase64 = fs.readFileSync(bannerPath).toString('base64')
+  } catch { /* banner file missing — skip silently */ }
 
   const renderedSubject = renderTemplate(subject, { name: toName.trim(), email: toEmail.trim() })
   const renderedBody    = renderTemplate(bodyTemplate, { name: toName.trim(), email: toEmail.trim(), responseLink })
@@ -74,7 +83,7 @@ export async function POST(req: NextRequest) {
   <!-- 25 Years Banner -->
   <tr>
     <td colspan="3" style="padding-top:8px;">
-      <img src="${appUrl}/25years-banner.png" alt="Celebrating 25 Years of Excellence" width="560" style="display:block;width:100%;max-width:560px;" />
+      ${bannerBase64 ? `<img src="data:image/png;base64,${bannerBase64}" alt="Celebrating 25 Years of Excellence" width="560" style="display:block;width:100%;max-width:560px;" />` : ''}
     </td>
   </tr>
 </table>`
