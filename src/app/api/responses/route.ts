@@ -6,9 +6,6 @@ import { prisma } from '@/lib/prisma'
 export async function GET() {
   const responses = await prisma.employeeResponse.findMany({
     orderBy: { receivedAt: 'desc' },
-    include: {
-      inboundEmail: { select: { subject: true } },
-    },
   })
 
   const total = await prisma.sentEmail.count({ where: { status: { not: 'failed' } } })

@@ -22,6 +22,7 @@ type Stage = 'loading' | 'not-found' | 'already-submitted' | 'form' | 'confirm' 
 const COUNTRY_CODES = [
   { label: 'UAE (+971)', value: '+971' },
   { label: 'KSA (+966)', value: '+966' },
+  { label: 'Other',      value: 'other' },
 ]
 
 export default function RespondPage() {
@@ -29,15 +30,19 @@ export default function RespondPage() {
   const [stage, setStage]   = useState<Stage>('loading')
   const [info, setInfo]     = useState<EmployeeInfo | null>(null)
   const [employeeId, setEmployeeId]     = useState('')
-  const [workCode, setWorkCode]         = useState('+971')
-  const [workNumber, setWorkNumber]     = useState('')
-  const [personalCode, setPersonalCode] = useState('+971')
-  const [personalNumber, setPersonalNumber] = useState('')
+  const [workCode, setWorkCode]             = useState('+971')
+  const [workCustomCode, setWorkCustomCode] = useState('')
+  const [workNumber, setWorkNumber]         = useState('')
+  const [personalCode, setPersonalCode]             = useState('+971')
+  const [personalCustomCode, setPersonalCustomCode] = useState('')
+  const [personalNumber, setPersonalNumber]         = useState('')
   const [errors, setErrors]   = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
 
-  const workPhone     = workNumber     ? `${workCode} ${workNumber.trim()}`     : ''
-  const personalPhone = personalNumber ? `${personalCode} ${personalNumber.trim()}` : ''
+  const resolvedWorkCode     = workCode === 'other'     ? workCustomCode.trim()     : workCode
+  const resolvedPersonalCode = personalCode === 'other' ? personalCustomCode.trim() : personalCode
+  const workPhone     = workNumber.trim()     ? `${resolvedWorkCode} ${workNumber.trim()}`     : ''
+  const personalPhone = personalNumber.trim() ? `${resolvedPersonalCode} ${personalNumber.trim()}` : ''
 
   useEffect(() => {
     fetch(`/api/respond/${token}`)
@@ -64,7 +69,9 @@ export default function RespondPage() {
       e.employeeId = 'Employee ID must not exceed 6 characters.'
     }
 
-    if (!workNumber.trim()) {
+    if (workCode === 'other' && !workCustomCode.trim()) {
+      e.workPhone = 'Please enter your country code.'
+    } else if (!workNumber.trim()) {
       e.workPhone = 'Work phone number is required.'
     } else if (digitsOnly(workNumber).length < 7) {
       e.workPhone = 'Please enter a valid work phone number.'
@@ -73,7 +80,9 @@ export default function RespondPage() {
     }
 
     if (personalNumber.trim()) {
-      if (digitsOnly(personalNumber).length < 7) {
+      if (personalCode === 'other' && !personalCustomCode.trim()) {
+        e.personalPhone = 'Please enter your country code.'
+      } else if (digitsOnly(personalNumber).length < 7) {
         e.personalPhone = 'Please enter a valid personal phone number.'
       } else if (digitsOnly(personalNumber).length > 12) {
         e.personalPhone = 'Phone number is too long.'
@@ -273,6 +282,8 @@ export default function RespondPage() {
             required
             code={workCode}
             onCodeChange={setWorkCode}
+            customCode={workCustomCode}
+            onCustomCodeChange={setWorkCustomCode}
             number={workNumber}
             onNumberChange={setWorkNumber}
             error={errors.workPhone}
@@ -284,6 +295,8 @@ export default function RespondPage() {
             required={false}
             code={personalCode}
             onCodeChange={setPersonalCode}
+            customCode={personalCustomCode}
+            onCustomCodeChange={setPersonalCustomCode}
             number={personalNumber}
             onNumberChange={setPersonalNumber}
             error={errors.personalPhone}
@@ -322,12 +335,14 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function PhoneField({
-  label, required, code, onCodeChange, number, onNumberChange, error,
+  label, required, code, onCodeChange, customCode, onCustomCodeChange, number, onNumberChange, error,
 }: {
   label: string
   required: boolean
   code: string
   onCodeChange: (v: string) => void
+  customCode: string
+  onCustomCodeChange: (v: string) => void
   number: string
   onNumberChange: (v: string) => void
   error?: string
@@ -350,6 +365,16 @@ function PhoneField({
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
+        {code === 'other' && (
+          <input
+            type="text"
+            value={customCode}
+            onChange={e => onCustomCodeChange('+' + e.target.value.replace(/[^\d]/g, ''))}
+            placeholder="+XXX"
+            maxLength={5}
+            className="w-16 bg-slate-800 text-slate-100 text-sm px-2 py-2.5 outline-none border-r border-slate-700 text-center"
+          />
+        )}
         <input
           type="tel"
           value={number}

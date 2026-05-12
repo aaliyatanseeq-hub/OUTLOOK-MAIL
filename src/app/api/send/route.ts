@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       toEmail:           toEmail.trim(),
       replyTo:           null,
       subject:           renderedSubject,
-      body:              finalBody,
+      body:              renderedBody, // store body without signature/banner to keep DB lean
       provider:          providerId,
       providerMessageId: result.messageId || null,
       responseToken,
