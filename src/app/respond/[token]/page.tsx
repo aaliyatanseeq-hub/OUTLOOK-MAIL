@@ -19,7 +19,11 @@ interface FormErrors {
 
 type Stage = 'loading' | 'not-found' | 'already-submitted' | 'form' | 'confirm' | 'success'
 
-
+const COUNTRY_CODES = [
+  { label: '🇦🇪  +971', value: '+971' },
+  { label: '🇸🇦  +966', value: '+966' },
+  { label: 'Other',    value: 'other' },
+]
 
 export default function RespondPage() {
   const { token } = useParams<{ token: string }>()
@@ -117,19 +121,19 @@ export default function RespondPage() {
     }
   }
 
-  // â”€â”€ Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Loading ──────────────────────────────────────────────────────────
   if (stage === 'loading') {
     return (
       <Shell>
         <div className="flex items-center gap-3 text-slate-400">
           <LoaderIcon className="w-5 h-5 animate-spin" />
-          Loadingâ€¦
+          Loading…
         </div>
       </Shell>
     )
   }
 
-  // â”€â”€ Not found â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Not found ────────────────────────────────────────────────────────
   if (stage === 'not-found') {
     return (
       <Shell>
@@ -142,7 +146,7 @@ export default function RespondPage() {
     )
   }
 
-  // â”€â”€ Already submitted â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Already submitted ────────────────────────────────────────────────
   if (stage === 'already-submitted') {
     return (
       <Shell>
@@ -161,7 +165,7 @@ export default function RespondPage() {
     )
   }
 
-  // â”€â”€ Success â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Success ──────────────────────────────────────────────────────────
   if (stage === 'success') {
     return (
       <Shell>
@@ -180,7 +184,7 @@ export default function RespondPage() {
     )
   }
 
-  // â”€â”€ Confirm screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Confirm screen ───────────────────────────────────────────────────
   if (stage === 'confirm') {
     return (
       <Shell>
@@ -194,7 +198,7 @@ export default function RespondPage() {
             <Row label="Email"          value={info?.toEmail ?? ''} />
             <Row label="Employee ID"    value={employeeId} />
             <Row label="Work Phone"     value={workPhone} />
-            <Row label="Personal Phone" value={personalPhone || 'â€”'} />
+            <Row label="Personal Phone" value={personalPhone || '—'} />
           </div>
           <div className="flex gap-3">
             <button
@@ -209,7 +213,7 @@ export default function RespondPage() {
               className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
             >
               {submitting ? <LoaderIcon className="w-4 h-4 animate-spin" /> : <SendIcon className="w-4 h-4" />}
-              {submitting ? 'Submittingâ€¦' : 'Confirm & Submit'}
+              {submitting ? 'Submitting…' : 'Confirm & Submit'}
             </button>
           </div>
         </div>
@@ -217,7 +221,7 @@ export default function RespondPage() {
     )
   }
 
-  // â”€â”€ Form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Form ─────────────────────────────────────────────────────────────
   return (
     <Shell>
       <div className="space-y-5 w-full">
@@ -243,12 +247,12 @@ export default function RespondPage() {
           </p>
         </div>
 
-        {/* Identity â€” read-only */}
+        {/* Identity — read-only */}
         <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl px-4 py-3 text-sm">
           <p className="text-slate-500 text-xs mb-0.5">Submitting as</p>
           <p className="text-slate-200 font-medium">
             {info?.toName}
-            <span className="text-slate-500 font-normal mx-2">Â·</span>
+            <span className="text-slate-500 font-normal mx-2">·</span>
             <span className="text-slate-400">{info?.toEmail}</span>
           </p>
         </div>
@@ -260,7 +264,7 @@ export default function RespondPage() {
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-300">
               Employee ID <span className="text-rose-400">*</span>
-              <span className="text-slate-500 text-xs font-normal ml-2">(5â€“6 characters)</span>
+              <span className="text-slate-500 text-xs font-normal ml-2">(5–6 characters)</span>
             </label>
             <input
               type="text"
@@ -314,19 +318,15 @@ export default function RespondPage() {
   )
 }
 
-// â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Sub-components ────────────────────────────────────────────────────
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center gap-2 mb-6 pb-4 border-b border-slate-800">
-          <div className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-          <div>
-            <p className="text-xs font-semibold text-slate-300 tracking-wide uppercase">Tanseeq Investment LLC</p>
-            <p className="text-xs text-slate-500">HR Department</p>
-          </div>
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-2 h-2 rounded-full bg-indigo-500" />
+          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase">Tanseeq Investment — HR Department</span>
         </div>
         {children}
       </div>
@@ -356,22 +356,18 @@ function PhoneField({
           : <span className="text-slate-500 text-xs font-normal ml-2">(optional)</span>}
       </label>
       <div className={`flex rounded-xl border overflow-hidden transition-colors ${error ? 'border-rose-500' : 'border-slate-700 focus-within:border-indigo-500'}`}>
-        {/* Country code selector â€” compact, styled */}
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 border-r border-slate-700">
           <select
             value={code}
             onChange={e => onCodeChange(e.target.value)}
-            className="h-full appearance-none bg-slate-800 text-slate-200 text-sm pl-3 pr-7 outline-none cursor-pointer border-r border-slate-700 min-w-[96px]"
+            className="appearance-none bg-slate-800 text-slate-200 text-sm pl-3 pr-7 py-2.5 outline-none cursor-pointer h-full"
           >
-            <option value="+971">ðŸ‡¦ðŸ‡ª +971</option>
-            <option value="+966">ðŸ‡¸ðŸ‡¦ +966</option>
-            <option value="other">Other</option>
+            {COUNTRY_CODES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
           </select>
-          {/* chevron */}
-          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">â–¾</span>
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 text-[10px]">▾</span>
         </div>
-
-        {/* Custom code input â€” only when "Other" is selected */}
         {code === 'other' && (
           <input
             type="text"
@@ -382,13 +378,11 @@ function PhoneField({
             className="w-16 bg-slate-800 text-slate-100 text-sm px-2 py-2.5 outline-none border-r border-slate-700 text-center"
           />
         )}
-
-        {/* Phone number input */}
         <input
           type="tel"
           value={number}
           onChange={e => onNumberChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
-          className="flex-1 bg-slate-800 text-slate-100 text-sm px-3 py-2.5 outline-none min-w-0"
+          className="flex-1 bg-slate-800 text-slate-100 text-sm px-3 py-2.5 outline-none"
         />
       </div>
       {error && <p className="text-xs text-rose-400">{error}</p>}
