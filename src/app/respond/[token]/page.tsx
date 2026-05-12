@@ -264,7 +264,6 @@ export default function RespondPage() {
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-slate-300">
               Employee ID <span className="text-rose-400">*</span>
-              <span className="text-slate-500 text-xs font-normal ml-2">(5–6 characters)</span>
             </label>
             <input
               type="text"
