@@ -6,6 +6,7 @@ import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import TextAlign from '@tiptap/extension-text-align'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
 import {
   BoldIcon, ItalicIcon, UnderlineIcon, StrikethroughIcon,
   LinkIcon, ListIcon, ListOrderedIcon, QuoteIcon,
@@ -47,12 +48,35 @@ export function RichTextEditor({ value, onChange, placeholder = 'Write your emai
       Link.configure({ openOnClick: false }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder }),
+      Image.configure({ allowBase64: true, inline: true }),
     ],
     content: value || '',
     editorProps: {
       attributes: {
         class: 'outline-none',
         style: `min-height: ${minHeight}px; padding: 16px;`,
+      },
+      // Handle image paste from clipboard (e.g. Outlook signatures)
+      handlePaste(view, event) {
+        const items = event.clipboardData?.items
+        if (!items) return false
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            event.preventDefault()
+            const file = item.getAsFile()
+            if (!file) continue
+            const reader = new FileReader()
+            reader.onload = (e) => {
+              const src = e.target?.result as string
+              if (src) view.dispatch(view.state.tr.replaceSelectionWith(
+                view.state.schema.nodes.image.create({ src })
+              ))
+            }
+            reader.readAsDataURL(file)
+            return true
+          }
+        }
+        return false
       },
     },
     onUpdate({ editor }) { onChange?.(editor.getHTML()) },
