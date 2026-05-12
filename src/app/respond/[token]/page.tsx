@@ -223,21 +223,18 @@ export default function RespondPage() {
         <form onSubmit={handleReview} className="space-y-4">
           <Field
             label="Employee ID"
-            placeholder="e.g. TQ-1045"
             value={employeeId}
             onChange={setEmployeeId}
             error={errors.employeeId}
           />
           <Field
             label="Work Phone Number"
-            placeholder="e.g. +971 4 123 4567"
             value={workPhone}
             onChange={setWorkPhone}
             error={errors.workPhone}
           />
           <Field
-            label="Personal Phone Number (Optional)"
-            placeholder="e.g. +971 55 987 6543"
+            label="Personal Phone Number"
             value={personalPhone}
             onChange={setPersonalPhone}
             error={errors.personalPhone}
@@ -277,10 +274,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function Field({
-  label, placeholder, value, onChange, error, optional,
+  label, value, onChange, error, optional,
 }: {
   label: string
-  placeholder: string
   value: string
   onChange: (v: string) => void
   error?: string
@@ -296,8 +292,7 @@ function Field({
         type="text"
         value={value}
         onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`w-full px-4 py-2.5 rounded-xl bg-slate-800 border text-slate-100 placeholder-slate-600 text-sm focus:outline-none focus:border-indigo-500 transition-colors ${
+        className={`w-full px-4 py-2.5 rounded-xl bg-slate-800 border text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition-colors ${
           error ? 'border-rose-500' : 'border-slate-700'
         }`}
       />
