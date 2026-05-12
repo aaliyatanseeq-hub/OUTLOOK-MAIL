@@ -1,8 +1,6 @@
 export const dynamic = 'force-dynamic'
 
 import crypto from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getEmailProvider, getEmailProviderId } from '@/lib/email/get-email-provider'
@@ -39,56 +37,10 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || 'http://localhost:3000'
   const responseLink = `${appUrl}/respond/${responseToken}`
 
-  // Embed banner as base64 so email clients show it without needing to "load images"
-  let bannerBase64 = ''
-  try {
-    const bannerPath = path.join(process.cwd(), 'public', '25years-banner.png')
-    bannerBase64 = fs.readFileSync(bannerPath).toString('base64')
-  } catch { /* banner file missing — skip silently */ }
-
   const renderedSubject = renderTemplate(subject, { name: toName.trim(), email: toEmail.trim() })
   const renderedBody    = renderTemplate(bodyTemplate, { name: toName.trim(), email: toEmail.trim(), responseLink })
 
-  const signature = `
-<br/>
-<table cellpadding="0" cellspacing="0" width="560" style="font-family:Arial,sans-serif;">
-  <!-- Main signature row -->
-  <tr>
-    <td colspan="3" style="padding-bottom:10px;border-bottom:2px solid #c8a94a;">&nbsp;</td>
-  </tr>
-  <tr>
-    <!-- Name -->
-    <td style="width:130px;vertical-align:middle;border-right:1px solid #cccccc;padding:10px 16px 10px 0;">
-      <p style="margin:0;font-weight:bold;font-size:13px;color:#1a1a2e;">HR Department</p>
-    </td>
-    <!-- Logo -->
-    <td style="width:160px;text-align:center;vertical-align:middle;padding:10px 16px;border-right:1px solid #cccccc;">
-      <img src="http://tanseeqinvestment.com/wp-content/uploads/2019/08/tanseeq-investment_logo-tt-01.png"
-           alt="Tanseeq Investment" width="120" style="display:block;margin:0 auto;" />
-    </td>
-    <!-- Company Details -->
-    <td style="padding:10px 0 10px 16px;vertical-align:middle;font-size:12px;color:#444444;line-height:1.8;">
-      <p style="margin:0;font-weight:bold;font-size:13px;color:#1a1a2e;">Tanseeq Investment LLC</p>
-      <p style="margin:0;">P O Box: 3151, Dubai, UAE</p>
-      <p style="margin:0;"><a href="mailto:hr-notify@tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">hr-notify@tanseeqinvestment.com</a></p>
-      <p style="margin:0;"><a href="http://www.tanseeqinvestment.com" style="color:#c8a94a;text-decoration:none;">www.tanseeqinvestment.com</a></p>
-    </td>
-  </tr>
-  <!-- Tagline -->
-  <tr>
-    <td colspan="3" style="text-align:center;padding:8px 0;border-top:1px solid #e0c97a;border-bottom:1px solid #e0c97a;font-size:12px;color:#c8a94a;letter-spacing:2px;font-style:italic;">
-      ~&nbsp;&nbsp;In Pursuit of Excellence&nbsp;&nbsp;~
-    </td>
-  </tr>
-  <!-- 25 Years Banner -->
-  <tr>
-    <td colspan="3" style="padding-top:8px;">
-      ${bannerBase64 ? `<img src="data:image/png;base64,${bannerBase64}" alt="Celebrating 25 Years of Excellence" width="560" style="display:block;width:100%;max-width:560px;" />` : ''}
-    </td>
-  </tr>
-</table>`
-
-  const finalBody = renderedBody + signature
+  const finalBody = renderedBody
 
   // Resolve sender: DB settings → env vars
   const sender = await getSenderConfig()

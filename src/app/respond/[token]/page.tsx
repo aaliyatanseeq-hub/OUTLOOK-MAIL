@@ -324,9 +324,15 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="w-2 h-2 rounded-full bg-indigo-500" />
-          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase">Tanseeq Investment — HR Department</span>
+        {/* Header with logo */}
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+          <img
+            src="http://tanseeqinvestment.com/wp-content/uploads/2019/08/tanseeq-investment_logo-tt-01.png"
+            alt="Tanseeq Investment"
+            className="h-10 w-auto object-contain"
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+          />
+          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase text-right">HR Department</span>
         </div>
         {children}
       </div>
@@ -355,32 +361,39 @@ function PhoneField({
           ? <span className="text-rose-400 ml-1">*</span>
           : <span className="text-slate-500 text-xs font-normal ml-2">(optional)</span>}
       </label>
-      <div className={`flex rounded-xl border overflow-hidden transition-colors ${error ? 'border-rose-500' : 'border-slate-700 focus-within:border-indigo-500'}`}>
-        <select
-          value={code}
-          onChange={e => onCodeChange(e.target.value)}
-          className="bg-slate-800 text-slate-300 text-sm px-3 py-2.5 border-r border-slate-700 outline-none shrink-0 cursor-pointer"
-        >
-          {COUNTRY_CODES.map(c => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-        {code === 'other' && (
+      <div className={`rounded-xl border transition-colors ${error ? 'border-rose-500' : 'border-slate-700 focus-within:border-indigo-500'}`}>
+        {/* Country code row */}
+        <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+          <span className="text-xs text-slate-500 shrink-0">Country</span>
+          <select
+            value={code}
+            onChange={e => onCodeChange(e.target.value)}
+            className="bg-transparent text-slate-300 text-xs outline-none cursor-pointer"
+          >
+            {COUNTRY_CODES.map(c => (
+              <option key={c.value} value={c.value} className="bg-slate-800">{c.label}</option>
+            ))}
+          </select>
+          {code === 'other' && (
+            <input
+              type="text"
+              value={customCode}
+              onChange={e => onCustomCodeChange('+' + e.target.value.replace(/[^\d]/g, ''))}
+              placeholder="+XXX"
+              maxLength={5}
+              className="w-14 bg-transparent text-slate-200 text-xs outline-none border-b border-slate-600 pb-0.5 text-center"
+            />
+          )}
+        </div>
+        {/* Number input */}
+        <div className="border-t border-slate-800">
           <input
-            type="text"
-            value={customCode}
-            onChange={e => onCustomCodeChange('+' + e.target.value.replace(/[^\d]/g, ''))}
-            placeholder="+XXX"
-            maxLength={5}
-            className="w-16 bg-slate-800 text-slate-100 text-sm px-2 py-2.5 outline-none border-r border-slate-700 text-center"
+            type="tel"
+            value={number}
+            onChange={e => onNumberChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
+            className="w-full bg-transparent text-slate-100 text-sm px-3 py-2.5 outline-none"
           />
-        )}
-        <input
-          type="tel"
-          value={number}
-          onChange={e => onNumberChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
-          className="flex-1 bg-slate-800 text-slate-100 text-sm px-3 py-2.5 outline-none"
-        />
+        </div>
       </div>
       {error && <p className="text-xs text-rose-400">{error}</p>}
     </div>
