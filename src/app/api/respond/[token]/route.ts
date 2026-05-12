@@ -61,29 +61,31 @@ export async function POST(
   const wPhone = workPhone?.trim() ?? ''
   const pPhone = personalPhone?.trim() ?? ''
 
-  // Employee ID: required, min 3 chars
+  // Employee ID: required, 5–6 chars
   if (!empId) {
     errors.employeeId = 'Employee ID is required.'
-  } else if (empId.length < 3) {
-    errors.employeeId = 'Employee ID must be at least 3 characters.'
+  } else if (empId.length < 5) {
+    errors.employeeId = 'Employee ID must be at least 5 characters.'
+  } else if (empId.length > 6) {
+    errors.employeeId = 'Employee ID must not exceed 6 characters.'
   }
 
-  // Phone validation: strip non-digits, must be 7–15 digits (ITU standard)
+  // Phone validation: strip non-digits, must be 7–15 digits
   const digitsOnly = (v: string) => v.replace(/\D/g, '')
 
   if (!wPhone) {
     errors.workPhone = 'Work phone number is required.'
   } else if (digitsOnly(wPhone).length < 7) {
-    errors.workPhone = 'Work phone number is too short. Please enter a valid number.'
+    errors.workPhone = 'Please enter a valid work phone number.'
   } else if (digitsOnly(wPhone).length > 15) {
-    errors.workPhone = 'Work phone number is too long. Please enter a valid number.'
+    errors.workPhone = 'Phone number is too long.'
   }
 
-  // Personal phone is optional — only validate format if provided
+  // Personal phone is optional — only validate if provided
   if (pPhone && digitsOnly(pPhone).length < 7) {
-    errors.personalPhone = 'Personal phone number is too short. Please enter a valid number.'
+    errors.personalPhone = 'Please enter a valid personal phone number.'
   } else if (pPhone && digitsOnly(pPhone).length > 15) {
-    errors.personalPhone = 'Personal phone number is too long. Please enter a valid number.'
+    errors.personalPhone = 'Phone number is too long.'
   }
 
   if (Object.keys(errors).length > 0) {

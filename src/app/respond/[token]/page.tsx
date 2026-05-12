@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { CheckCircle2Icon, AlertTriangleIcon, LoaderIcon, SendIcon } from 'lucide-react'
+import { CheckCircle2Icon, AlertTriangleIcon, LoaderIcon, SendIcon, ShieldCheckIcon } from 'lucide-react'
 
 interface EmployeeInfo {
   toName: string
@@ -19,15 +19,25 @@ interface FormErrors {
 
 type Stage = 'loading' | 'not-found' | 'already-submitted' | 'form' | 'confirm' | 'success'
 
+const COUNTRY_CODES = [
+  { label: 'UAE (+971)', value: '+971' },
+  { label: 'KSA (+966)', value: '+966' },
+]
+
 export default function RespondPage() {
   const { token } = useParams<{ token: string }>()
-  const [stage, setStage]     = useState<Stage>('loading')
-  const [info, setInfo]       = useState<EmployeeInfo | null>(null)
+  const [stage, setStage]   = useState<Stage>('loading')
+  const [info, setInfo]     = useState<EmployeeInfo | null>(null)
   const [employeeId, setEmployeeId]     = useState('')
-  const [workPhone, setWorkPhone]       = useState('')
-  const [personalPhone, setPersonalPhone] = useState('')
+  const [workCode, setWorkCode]         = useState('+971')
+  const [workNumber, setWorkNumber]     = useState('')
+  const [personalCode, setPersonalCode] = useState('+971')
+  const [personalNumber, setPersonalNumber] = useState('')
   const [errors, setErrors]   = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
+
+  const workPhone     = workNumber     ? `${workCode} ${workNumber.trim()}`     : ''
+  const personalPhone = personalNumber ? `${personalCode} ${personalNumber.trim()}` : ''
 
   useEffect(() => {
     fetch(`/api/respond/${token}`)
@@ -44,30 +54,30 @@ export default function RespondPage() {
 
   function validate(): boolean {
     const e: FormErrors = {}
-
-    const empId  = employeeId.trim()
-    const wPhone = workPhone.trim()
-    const pPhone = personalPhone.trim()
+    const empId = employeeId.trim()
 
     if (!empId) {
       e.employeeId = 'Employee ID is required.'
-    } else if (empId.length < 3) {
-      e.employeeId = 'Employee ID must be at least 3 characters.'
+    } else if (empId.length < 5) {
+      e.employeeId = 'Employee ID must be at least 5 characters.'
+    } else if (empId.length > 6) {
+      e.employeeId = 'Employee ID must not exceed 6 characters.'
     }
 
-    if (!wPhone) {
+    if (!workNumber.trim()) {
       e.workPhone = 'Work phone number is required.'
-    } else if (digitsOnly(wPhone).length < 7) {
-      e.workPhone = 'Too short — include your country code, e.g. +971 4 123 4567'
-    } else if (digitsOnly(wPhone).length > 15) {
-      e.workPhone = 'Too long — please enter a valid phone number.'
+    } else if (digitsOnly(workNumber).length < 7) {
+      e.workPhone = 'Please enter a valid work phone number.'
+    } else if (digitsOnly(workNumber).length > 12) {
+      e.workPhone = 'Phone number is too long.'
     }
 
-    // Personal phone is optional — only validate format if provided
-    if (pPhone && digitsOnly(pPhone).length < 7) {
-      e.personalPhone = 'Too short — include your country code, e.g. +971 55 123 4567'
-    } else if (pPhone && digitsOnly(pPhone).length > 15) {
-      e.personalPhone = 'Too long — please enter a valid phone number.'
+    if (personalNumber.trim()) {
+      if (digitsOnly(personalNumber).length < 7) {
+        e.personalPhone = 'Please enter a valid personal phone number.'
+      } else if (digitsOnly(personalNumber).length > 12) {
+        e.personalPhone = 'Phone number is too long.'
+      }
     }
 
     setErrors(e)
@@ -85,7 +95,11 @@ export default function RespondPage() {
       const res = await fetch(`/api/respond/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId: employeeId.trim(), workPhone: workPhone.trim(), personalPhone: personalPhone.trim() }),
+        body: JSON.stringify({
+          employeeId: employeeId.trim(),
+          workPhone,
+          personalPhone,
+        }),
       })
       const data = await res.json()
       if (res.status === 409 || data.error) {
@@ -117,7 +131,7 @@ export default function RespondPage() {
         <div className="text-center space-y-3">
           <AlertTriangleIcon className="w-12 h-12 text-amber-400 mx-auto" />
           <h2 className="text-xl font-semibold text-white">Invalid Link</h2>
-          <p className="text-slate-400 text-sm">This link is invalid or has expired. Please contact HR if you need a new link.</p>
+          <p className="text-slate-400 text-sm">This link is invalid or has already been used. Please contact the HR Department if you require assistance.</p>
         </div>
       </Shell>
     )
@@ -133,10 +147,10 @@ export default function RespondPage() {
           <p className="text-slate-400 text-sm">
             Your details have already been recorded.
             {info?.submittedAt && (
-              <> Submitted on {new Date(info.submittedAt).toLocaleDateString()}.</>
+              <> Submitted on {new Date(info.submittedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.</>
             )}
           </p>
-          <p className="text-slate-500 text-xs">If you think this is a mistake, contact HR.</p>
+          <p className="text-slate-500 text-xs">If you believe this is an error, please contact the HR Department.</p>
         </div>
       </Shell>
     )
@@ -148,14 +162,14 @@ export default function RespondPage() {
       <Shell>
         <div className="text-center space-y-3">
           <CheckCircle2Icon className="w-14 h-14 text-emerald-400 mx-auto" />
-          <h2 className="text-xl font-semibold text-white">Thank You!</h2>
-          <p className="text-slate-300 text-sm">Your details have been successfully submitted.</p>
+          <h2 className="text-xl font-semibold text-white">Submission Successful</h2>
+          <p className="text-slate-300 text-sm">Your details have been securely submitted to the HR Department.</p>
           <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 text-left text-sm space-y-2 mt-2">
             <Row label="Employee ID"    value={employeeId} />
             <Row label="Work Phone"     value={workPhone} />
-            <Row label="Personal Phone" value={personalPhone} />
+            {personalPhone && <Row label="Personal Phone" value={personalPhone} />}
           </div>
-          <p className="text-slate-500 text-xs pt-2">You may close this window.</p>
+          <p className="text-slate-500 text-xs pt-2">You may now close this window.</p>
         </div>
       </Shell>
     )
@@ -168,14 +182,14 @@ export default function RespondPage() {
         <div className="space-y-5 w-full">
           <div className="text-center space-y-1">
             <h2 className="text-xl font-semibold text-white">Confirm Your Details</h2>
-            <p className="text-slate-400 text-sm">Please review before submitting.</p>
+            <p className="text-slate-400 text-sm">Please review carefully before submitting. This cannot be changed once submitted.</p>
           </div>
           <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3 text-sm">
             <Row label="Name"           value={info?.toName ?? ''} />
             <Row label="Email"          value={info?.toEmail ?? ''} />
             <Row label="Employee ID"    value={employeeId} />
             <Row label="Work Phone"     value={workPhone} />
-            <Row label="Personal Phone" value={personalPhone} />
+            <Row label="Personal Phone" value={personalPhone || '—'} />
           </div>
           <div className="flex gap-3">
             <button
@@ -202,62 +216,99 @@ export default function RespondPage() {
   return (
     <Shell>
       <div className="space-y-5 w-full">
+
         {/* Header */}
-        <div className="text-center space-y-1">
-          <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto mb-3">
+        <div className="text-center space-y-2">
+          <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center mx-auto">
             <span className="text-indigo-300 text-xl font-bold">
               {(info?.toName || '?')[0].toUpperCase()}
             </span>
           </div>
-          <h2 className="text-xl font-semibold text-white">Hi, {info?.toName?.split(' ')[0]}!</h2>
-          <p className="text-slate-400 text-sm">Please fill in your details below. Fields marked <span className="text-rose-400">*</span> are required.</p>
+          <h2 className="text-xl font-semibold text-white">Dear {info?.toName?.split(' ')[0]},</h2>
         </div>
 
-        {/* Read-only identity */}
+        {/* Notice box */}
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <ShieldCheckIcon className="w-4 h-4 text-indigo-400 shrink-0" />
+            <p className="text-xs font-semibold text-indigo-300 uppercase tracking-wide">Official HR Records Update</p>
+          </div>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            This form is part of an official employee records update by Tanseeq Investment LLC. Please ensure all information entered matches your official HR records exactly.
+          </p>
+          <p className="text-xs text-amber-400/80 font-medium">
+            Do not share this link. It is uniquely assigned to you.
+          </p>
+        </div>
+
+        {/* Identity — read-only */}
         <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl px-4 py-3 text-sm">
           <p className="text-slate-500 text-xs mb-0.5">Submitting as</p>
-          <p className="text-slate-200 font-medium">{info?.toName} <span className="text-slate-500 font-normal">·</span> <span className="text-slate-400">{info?.toEmail}</span></p>
+          <p className="text-slate-200 font-medium">
+            {info?.toName}
+            <span className="text-slate-500 font-normal mx-2">·</span>
+            <span className="text-slate-400">{info?.toEmail}</span>
+          </p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleReview} className="space-y-4">
-          <Field
-            label="Employee ID"
-            value={employeeId}
-            onChange={setEmployeeId}
-            error={errors.employeeId}
-          />
-          <Field
+
+          {/* Employee ID */}
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-slate-300">
+              Employee ID <span className="text-rose-400">*</span>
+              <span className="text-slate-500 text-xs font-normal ml-2">(5–6 characters)</span>
+            </label>
+            <input
+              type="text"
+              value={employeeId}
+              onChange={e => setEmployeeId(e.target.value)}
+              maxLength={6}
+              className={`w-full px-4 py-2.5 rounded-xl bg-slate-800 border text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition-colors ${errors.employeeId ? 'border-rose-500' : 'border-slate-700'}`}
+            />
+            {errors.employeeId && <p className="text-xs text-rose-400">{errors.employeeId}</p>}
+          </div>
+
+          {/* Work Phone */}
+          <PhoneField
             label="Work Phone Number"
-            value={workPhone}
-            onChange={setWorkPhone}
+            required
+            code={workCode}
+            onCodeChange={setWorkCode}
+            number={workNumber}
+            onNumberChange={setWorkNumber}
             error={errors.workPhone}
           />
-          <Field
+
+          {/* Personal Phone */}
+          <PhoneField
             label="Personal Phone Number"
-            value={personalPhone}
-            onChange={setPersonalPhone}
+            required={false}
+            code={personalCode}
+            onCodeChange={setPersonalCode}
+            number={personalNumber}
+            onNumberChange={setPersonalNumber}
             error={errors.personalPhone}
-            optional
           />
 
           <button
             type="submit"
             className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-2 mt-2"
           >
-            Review & Submit →
+            Review & Submit
           </button>
         </form>
 
         <p className="text-center text-xs text-slate-600">
-          This form is intended only for {info?.toEmail}. Do not share this link.
+          This link is strictly personal and intended solely for <span className="text-slate-500">{info?.toEmail}</span>. Sharing this link is not permitted.
         </p>
       </div>
     </Shell>
   )
 }
 
-// ── Reusable sub-components ───────────────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -265,7 +316,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-2 h-2 rounded-full bg-indigo-500" />
-          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase">HR Records Update</span>
+          <span className="text-xs text-slate-500 font-medium tracking-wide uppercase">Tanseeq Investment — HR Department</span>
         </div>
         {children}
       </div>
@@ -273,29 +324,42 @@ function Shell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Field({
-  label, value, onChange, error, optional,
+function PhoneField({
+  label, required, code, onCodeChange, number, onNumberChange, error,
 }: {
   label: string
-  value: string
-  onChange: (v: string) => void
+  required: boolean
+  code: string
+  onCodeChange: (v: string) => void
+  number: string
+  onNumberChange: (v: string) => void
   error?: string
-  optional?: boolean
 }) {
   return (
     <div className="space-y-1.5">
       <label className="block text-sm font-medium text-slate-300">
-        {label} {!optional && <span className="text-rose-400">*</span>}
-        {optional && <span className="text-slate-500 text-xs font-normal ml-1">(optional)</span>}
+        {label}
+        {required
+          ? <span className="text-rose-400 ml-1">*</span>
+          : <span className="text-slate-500 text-xs font-normal ml-2">(optional)</span>}
       </label>
-      <input
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className={`w-full px-4 py-2.5 rounded-xl bg-slate-800 border text-slate-100 text-sm focus:outline-none focus:border-indigo-500 transition-colors ${
-          error ? 'border-rose-500' : 'border-slate-700'
-        }`}
-      />
+      <div className={`flex rounded-xl border overflow-hidden transition-colors ${error ? 'border-rose-500' : 'border-slate-700 focus-within:border-indigo-500'}`}>
+        <select
+          value={code}
+          onChange={e => onCodeChange(e.target.value)}
+          className="bg-slate-800 text-slate-300 text-sm px-3 py-2.5 border-r border-slate-700 outline-none shrink-0 cursor-pointer"
+        >
+          {COUNTRY_CODES.map(c => (
+            <option key={c.value} value={c.value}>{c.label}</option>
+          ))}
+        </select>
+        <input
+          type="tel"
+          value={number}
+          onChange={e => onNumberChange(e.target.value.replace(/[^\d\s\-]/g, ''))}
+          className="flex-1 bg-slate-800 text-slate-100 text-sm px-3 py-2.5 outline-none"
+        />
+      </div>
       {error && <p className="text-xs text-rose-400">{error}</p>}
     </div>
   )
