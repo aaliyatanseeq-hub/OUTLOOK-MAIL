@@ -85,6 +85,10 @@ export async function POST(
       const local = d.replace(/^966/, '')
       if (local.length < 8) return 'KSA numbers must be at least 8 digits.'
       if (local.length > 9) return 'KSA numbers must not exceed 9 digits.'
+    } else if (phone.startsWith('+91')) {
+      // India: exactly 10 digits after code
+      const local = d.replace(/^91/, '')
+      if (local.length !== 10) return 'Indian numbers must be exactly 10 digits.'
     } else {
       if (d.length < 7)  return 'Please enter a valid phone number.'
       if (d.length > 15) return 'Phone number is too long.'

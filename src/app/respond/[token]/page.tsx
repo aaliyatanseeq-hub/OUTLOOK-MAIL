@@ -22,6 +22,7 @@ type Stage = 'loading' | 'not-found' | 'already-submitted' | 'form' | 'confirm' 
 const COUNTRY_CODES = [
   { label: '🇦🇪  +971', value: '+971' },
   { label: '🇸🇦  +966', value: '+966' },
+  { label: '🇮🇳  +91',  value: '+91'  },
   { label: 'Other',    value: 'other' },
 ]
 
@@ -61,13 +62,17 @@ export default function RespondPage() {
     const d = digitsOnly(number)
     if (!number.trim()) return `${label} is required.`
     if (code === '+971') {
-      // UAE: 8 digits (landline e.g. 41234567) or 9 digits (mobile e.g. 501234567)
+      // UAE: 8–9 digits (landline: 8, mobile: 9)
       if (d.length < 8) return 'UAE numbers must be at least 8 digits.'
       if (d.length > 9) return 'UAE numbers must not exceed 9 digits.'
     } else if (code === '+966') {
-      // KSA: 9 digits (mobile e.g. 501234567)
+      // KSA: 8–9 digits
       if (d.length < 8) return 'KSA numbers must be at least 8 digits.'
       if (d.length > 9) return 'KSA numbers must not exceed 9 digits.'
+    } else if (code === '+91') {
+      // India: exactly 10 digits
+      if (d.length < 10) return 'Indian numbers must be exactly 10 digits.'
+      if (d.length > 10) return 'Indian numbers must be exactly 10 digits.'
     } else {
       if (d.length < 7)  return 'Please enter a valid phone number.'
       if (d.length > 12) return 'Phone number is too long.'
